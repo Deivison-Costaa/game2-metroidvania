@@ -19,6 +19,7 @@ public:
 
     void swap() const;
     void setTitle(std::string_view title);
+    void setSize(int w, int h) { m_width = w; m_height = h; }
 
     int          width()  const { return m_width; }
     int          height() const { return m_height; }

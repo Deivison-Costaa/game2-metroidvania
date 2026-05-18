@@ -32,6 +32,13 @@ void App::run() {
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) m_running = false;
+            if (ev.type == SDL_WINDOWEVENT &&
+                ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                const int w = ev.window.data1;
+                const int h = ev.window.data2;
+                m_window->setSize(w, h);
+                glViewport(0, 0, w, h);
+            }
             onEvent(ev);
         }
 

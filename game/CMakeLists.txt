@@ -14,3 +14,11 @@ add_custom_command(TARGET game POST_BUILD
         "$<TARGET_FILE_DIR:game>/shaders"
     COMMENT "Syncing shaders to build output"
 )
+
+# Copy assets next to binary (ASSET_ROOT macro still used for absolute paths)
+add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/assets"
+        "$<TARGET_FILE_DIR:game>/assets"
+    COMMENT "Syncing assets to build output"
+)

@@ -2,6 +2,11 @@ add_library(engine STATIC
     src/core/Window.cpp
     src/core/App.cpp
     src/render/Shader.cpp
+    src/render/Texture.cpp
+    src/render/Camera.cpp
+    src/render/SpriteBatch.cpp
+    src/render/Mesh.cpp
+    src/render/MeshRenderer.cpp
 )
 
 target_include_directories(engine
@@ -17,6 +22,8 @@ target_link_libraries(engine
         glm::glm
     PRIVATE
         Freetype::Freetype
+        stb
+        assimp::assimp
 )
 
 if(ENABLE_IMGUI AND TARGET imgui_lib)

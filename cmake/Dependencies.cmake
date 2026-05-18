@@ -25,8 +25,9 @@ find_package(GLEW REQUIRED)
 find_package(Freetype REQUIRED)
 find_package(OpenAL REQUIRED)
 
-# Optional — used from M2 onwards
-find_package(assimp QUIET)
+# Assimp — 3D model loading (used from M1 MeshLoader)
+find_package(assimp REQUIRED)
+# Box2D — physics (used from M2 onwards)
 find_package(box2d  QUIET)
 
 # ─── GLM — math, header-only ─────────────────────────────────────────────────

@@ -33,7 +33,7 @@ cmake --build build -j$(nproc)
 ./build/game/game
 ```
 
-## Controles (M0 Bootstrap)
+## Controles
 
 | Tecla | Ação |
 |-------|------|
@@ -44,7 +44,7 @@ cmake --build build -j$(nproc)
 | # | Nome | Status |
 |---|------|--------|
 | M0 | Bootstrap — janela + shader animado | ✅ |
-| M1 | Renderer 2D + 3D (SpriteBatch, MeshRenderer, Camera) | 🔜 |
+| M1 | Renderer 2D + 3D (SpriteBatch, MeshRenderer, Camera) | ✅ |
 | M2 | ECS + Physics (Box2D) + Input | 🔜 |
 | M3 | Animation + Combate + Câmera cinematográfica | 🔜 |
 | M4 | Inimigos com IA FSM + Tiled (.tmx) | 🔜 |

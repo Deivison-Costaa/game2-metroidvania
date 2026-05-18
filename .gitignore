@@ -19,8 +19,10 @@ audio/music/*
 audio/sfx/*
 maps/*.tmx
 !assets/sprites/.gitkeep
+!assets/sprites/test.png
 !assets/tilesets/.gitkeep
 !assets/models/.gitkeep
+!assets/models/cube.obj
 !assets/textures/.gitkeep
 !assets/fonts/.gitkeep
 !audio/music/.gitkeep
