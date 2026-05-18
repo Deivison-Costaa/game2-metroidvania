@@ -86,6 +86,26 @@ bool PhysicsWorld::isOnGround(b2Body* body, float halfH, float eps) const {
     return cb.hit;
 }
 
+RaycastHit PhysicsWorld::raycastAny(glm::vec2 from, glm::vec2 to, b2Body* skip) const {
+    struct Callback : b2RayCastCallback {
+        b2Body*    skip;
+        RaycastHit result;
+        float ReportFixture(b2Fixture* f, const b2Vec2& pt,
+                            const b2Vec2& n, float frac) override {
+            if (f->IsSensor() || f->GetBody() == skip) return -1.f;
+            result.hit      = true;
+            result.fixture  = f;
+            result.point    = toGlm(pt);
+            result.normal   = toGlm(n);
+            result.fraction = frac;
+            return 0.f; // terminate at first hit
+        }
+    } cb;
+    cb.skip = skip;
+    m_world.RayCast(&cb, toB2(from), toB2(to));
+    return cb.result;
+}
+
 void PhysicsWorld::setContactListener(b2ContactListener* listener) {
     m_world.SetContactListener(listener);
 }

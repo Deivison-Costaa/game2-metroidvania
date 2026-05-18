@@ -1,0 +1,8 @@
+{
+    "name": "walker_hurt",
+    "loop": false,
+    "frames": [
+        { "uv": [0.00, 0.75, 0.25, 1.0], "duration": 0.12 },
+        { "uv": [0.25, 0.75, 0.50, 1.0], "duration": 0.12 }
+    ]
+}

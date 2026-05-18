@@ -7,6 +7,9 @@ add_executable(game
     src/systems/AnimationSystem.cpp
     src/systems/CombatSystem.cpp
     src/systems/CameraSystem.cpp
+    src/systems/EnemyAISystem.cpp
+    src/systems/EnemyCombatSystem.cpp
+    src/systems/ProjectileSystem.cpp
 )
 
 target_include_directories(game PRIVATE src)
@@ -32,4 +35,12 @@ add_custom_command(TARGET game POST_BUILD
         "${CMAKE_SOURCE_DIR}/assets"
         "$<TARGET_FILE_DIR:game>/assets"
     COMMENT "Syncing assets to build output"
+)
+
+# Copy maps next to binary
+add_custom_command(TARGET game POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CMAKE_SOURCE_DIR}/maps"
+        "$<TARGET_FILE_DIR:game>/maps"
+    COMMENT "Syncing maps to build output"
 )

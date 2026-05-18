@@ -1,21 +1,30 @@
 #include "scenes/GameScene.h"
 #include "components/Animator.h"
+#include "components/EnemyAI.h"
 #include "components/Health.h"
 #include "components/Hitbox.h"
 #include "components/Hurtbox.h"
 #include "components/PlayerControl.h"
+#include "components/Projectile.h"
 #include "components/RigidBody.h"
 #include "components/SpriteRenderer.h"
 #include "components/Transform.h"
 #include "systems/AnimationSystem.h"
 #include "systems/CameraSystem.h"
 #include "systems/CombatSystem.h"
+#include "systems/EnemyAISystem.h"
+#include "systems/EnemyCombatSystem.h"
 #include "systems/PhysicsSyncSystem.h"
 #include "systems/PlayerControllerSystem.h"
+#include "systems/ProjectileSystem.h"
 #include "systems/SpriteRenderSystem.h"
 #include "engine/core/App.h"
 #include "engine/core/Log.h"
 #include "engine/input/Action.h"
+#include "engine/map/TileMapRenderer.h"
+#include "engine/physics/CollisionCategories.h"
+#include "engine/physics/PhysicsConstants.h"
+#include "engine/render/ParallaxRenderer.h"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -59,6 +68,15 @@ void GameScene::init(eng::core::App& app) {
     m_textures.load("dummy",
         ASSET_ROOT "/assets/sprites/dummy.png",
         eng::render::TextureFilter::Nearest);
+    m_textures.load("enemy_walker",
+        ASSET_ROOT "/assets/sprites/enemy_walker.png",
+        eng::render::TextureFilter::Nearest);
+    m_textures.load("enemy_flyer",
+        ASSET_ROOT "/assets/sprites/enemy_flyer.png",
+        eng::render::TextureFilter::Nearest);
+    m_textures.load("enemy_ranged",
+        ASSET_ROOT "/assets/sprites/enemy_ranged.png",
+        eng::render::TextureFilter::Nearest);
 
     // Animation clips
     m_clips.load("idle",   ASSET_ROOT "/assets/data/player_idle.json");
@@ -66,6 +84,52 @@ void GameScene::init(eng::core::App& app) {
     m_clips.load("jump",   ASSET_ROOT "/assets/data/player_jump.json");
     m_clips.load("fall",   ASSET_ROOT "/assets/data/player_fall.json");
     m_clips.load("attack", ASSET_ROOT "/assets/data/player_attack.json");
+
+    // Enemy Walker clips
+    m_clips.load("walker_patrol", ASSET_ROOT "/assets/data/enemy_walker_patrol.json");
+    m_clips.load("walker_chase",  ASSET_ROOT "/assets/data/enemy_walker_chase.json");
+    m_clips.load("walker_attack", ASSET_ROOT "/assets/data/enemy_walker_attack.json");
+    m_clips.load("walker_hurt",   ASSET_ROOT "/assets/data/enemy_walker_hurt.json");
+    m_clips.load("walker_dead",   ASSET_ROOT "/assets/data/enemy_walker_dead.json");
+    // Enemy Flyer clips
+    m_clips.load("flyer_patrol",  ASSET_ROOT "/assets/data/enemy_flyer_patrol.json");
+    m_clips.load("flyer_chase",   ASSET_ROOT "/assets/data/enemy_flyer_chase.json");
+    m_clips.load("flyer_attack",  ASSET_ROOT "/assets/data/enemy_flyer_attack.json");
+    m_clips.load("flyer_hurt",    ASSET_ROOT "/assets/data/enemy_flyer_hurt.json");
+    m_clips.load("flyer_dead",    ASSET_ROOT "/assets/data/enemy_flyer_dead.json");
+    // Enemy Ranged clips
+    m_clips.load("ranged_idle",   ASSET_ROOT "/assets/data/enemy_ranged_patrol.json");
+    m_clips.load("ranged_attack", ASSET_ROOT "/assets/data/enemy_ranged_attack.json");
+    m_clips.load("ranged_hurt",   ASSET_ROOT "/assets/data/enemy_ranged_hurt.json");
+    m_clips.load("ranged_dead",   ASSET_ROOT "/assets/data/enemy_ranged_dead.json");
+
+    // Tileset texture
+    m_textures.load("tileset",
+        ASSET_ROOT "/assets/tilesets/test_tileset.png",
+        eng::render::TextureFilter::Nearest);
+    m_tilesetTex = m_textures.get("tileset");
+
+    // Parallax background textures
+    m_textures.load("parallax_sky",
+        ASSET_ROOT "/assets/sprites/parallax_sky.png",
+        eng::render::TextureFilter::Linear);
+    m_textures.load("parallax_mountains",
+        ASSET_ROOT "/assets/sprites/parallax_mountains.png",
+        eng::render::TextureFilter::Linear);
+    m_textures.load("parallax_trees",
+        ASSET_ROOT "/assets/sprites/parallax_trees.png",
+        eng::render::TextureFilter::Linear);
+
+    // Parallax layers (sky=furthest, trees=closest)
+    // factorX: 0=fixed, 1=scrolls with world. yOffsetFromCam: Y relative to camera center.
+    // worldH: must exceed the visible screen height (~8.6m at FOV=30, z=16).
+    m_parallax.push_back({m_textures.get("parallax_sky"),       0.05f,  0.5f, 11.f, -4.f, 32.f});
+    m_parallax.push_back({m_textures.get("parallax_mountains"), 0.20f, -1.0f,  9.f, -3.f, 32.f});
+    m_parallax.push_back({m_textures.get("parallax_trees"),     0.50f, -2.5f,  7.f, -2.f, 32.f});
+
+    // TileMap
+    m_tileMap = std::make_unique<eng::map::TileMap>(
+        eng::map::TileMap::fromFile(ASSET_ROOT "/maps/test_level.tmx"));
 
     // Physics debug draw
     m_physics.world().SetDebugDraw(m_dbgDraw);
@@ -78,74 +142,221 @@ void GameScene::init(eng::core::App& app) {
 
     buildLevel();
 
-    LOG_INFO("M3 ready — A/D move | Space jump | J attack | F1 debug | ESC quit");
+    LOG_INFO("M4 ready — A/D move | Space jump | J attack | F1 debug | ESC quit");
+}
+
+// Helper: set category/mask filter on every fixture of a body
+static void setBodyFilter(b2Body* body, uint16_t cat, uint16_t mask) {
+    b2Filter f;
+    f.categoryBits = cat;
+    f.maskBits     = mask;
+    for (auto* fix = body->GetFixtureList(); fix; fix = fix->GetNext())
+        fix->SetFilterData(f);
+}
+// Helper: set category/mask filter on a single fixture
+static void setFixtureFilter(b2Fixture* fix, uint16_t cat, uint16_t mask) {
+    b2Filter f;
+    f.categoryBits = cat;
+    f.maskBits     = mask;
+    fix->SetFilterData(f);
 }
 
 void GameScene::buildLevel() {
-    // --- Static world geometry ---
-    m_physics.createStaticBox({0.f, -0.5f},  8.f,  0.5f);   // ground
-    m_physics.createStaticBox({-8.f, 4.f},  0.12f, 5.f);    // left wall
-    m_physics.createStaticBox({ 8.f, 4.f},  0.12f, 5.f);    // right wall
+    using namespace eng::physics;
 
-    // --- Player ---
+    // ── Static world geometry from TMX "collision" object layer ──────────
+    glm::vec2 playerSpawnPos{-18.f, 2.f}; // default if not found in TMX
+
+    if (m_tileMap) {
+        for (const auto& ol : m_tileMap->objectLayers) {
+            if (ol.name == "collision") {
+                for (const auto& obj : ol.objects) {
+                    if (obj.type != "solid") continue;
+                    const glm::vec2 center =
+                        kMapOrigin + m_tileMap->tiledToWorld(obj.pos, obj.size);
+                    const float halfW = obj.size.x * 0.5f / 32.f;
+                    const float halfH = obj.size.y * 0.5f / 32.f;
+                    b2Body* wall = m_physics.createStaticBox(center, halfW, halfH);
+                    setBodyFilter(wall, kCatWorld, kMaskWorld);
+                }
+            } else if (ol.name == "spawns") {
+                for (const auto& obj : ol.objects) {
+                    if (obj.type == "player_spawn") {
+                        playerSpawnPos =
+                            kMapOrigin + m_tileMap->tiledToWorld(obj.pos, obj.size);
+                    }
+                }
+            }
+        }
+    } else {
+        // Fallback hard-coded geometry (shouldn't happen if TMX loaded)
+        b2Body* ground    = m_physics.createStaticBox({0.f, -0.5f},  8.f,  0.5f);
+        b2Body* leftWall  = m_physics.createStaticBox({-8.f, 4.f},  0.12f, 5.f);
+        b2Body* rightWall = m_physics.createStaticBox({ 8.f, 4.f},  0.12f, 5.f);
+        setBodyFilter(ground,    kCatWorld, kMaskWorld);
+        setBodyFilter(leftWall,  kCatWorld, kMaskWorld);
+        setBodyFilter(rightWall, kCatWorld, kMaskWorld);
+    }
+
+    // ── Player ────────────────────────────────────────────────────────────
     m_player = m_reg.create();
-    b2Body* playerBody = m_physics.createDynamicBox({0.f, 2.f}, 0.25f, 0.5f, 1.f, 0.1f);
+    b2Body* playerBody = m_physics.createDynamicBox(
+        playerSpawnPos, 0.25f, 0.5f, 1.f, 0.1f);
     playerBody->SetLinearDamping(0.f);
+    setBodyFilter(playerBody, kCatPlayer, kMaskPlayer);
 
     m_reg.emplace<Transform>(m_player);
     m_reg.emplace<RigidBody>(m_player, RigidBody{playerBody, 0.25f, 0.5f});
 
-    // Sprite — full 1m x 1m quad showing the sprite sheet
     auto& psr  = m_reg.emplace<SpriteRenderer>(m_player);
     psr.tex    = m_textures.get("player_sheet");
     psr.size   = {0.9f, 0.9f};
 
     m_reg.emplace<PlayerControl>(m_player);
 
-    // Animator — start in idle
     auto& anim = m_reg.emplace<Animator>(m_player);
     anim.clip  = m_clips.get("idle");
 
-    // Hitbox sensor — always active in Box2D, gated by Hitbox.active in CombatSystem
     b2Fixture* hitFix = m_physics.addSensorBox(
         playerBody, {0.6f, 0.f}, 0.4f, 0.3f);
+    setFixtureFilter(hitFix, kCatPlayerAttack, kMaskPlayerAttack);
     hitFix->GetUserData().pointer =
         reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hitbox, m_player));
-
     auto& hitbox      = m_reg.emplace<Hitbox>(m_player);
     hitbox.fixture    = hitFix;
     hitbox.damage     = 1.f;
     hitbox.knockback  = {4.f, 1.5f};
 
-    // --- Training dummy ---
-    m_dummy = m_reg.create();
-    // Dynamic with high damping so it absorbs knockback visually then settles
-    b2Body* dummyBody = m_physics.createDynamicBox({3.f, 0.6f}, 0.3f, 0.5f, 5.f, 0.8f);
-    dummyBody->SetLinearDamping(4.f);
-    dummyBody->SetFixedRotation(true);
+    b2Fixture* playerHurtFix = m_physics.addSensorBox(
+        playerBody, {0.f, 0.f}, 0.25f, 0.45f);
+    setFixtureFilter(playerHurtFix, kCatPlayer, kCatEnemyAttack);
+    playerHurtFix->GetUserData().pointer =
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hurtbox, m_player));
+    auto& playerHurtbox   = m_reg.emplace<Hurtbox>(m_player);
+    playerHurtbox.fixture = playerHurtFix;
+    playerHurtbox.owner   = m_player;
+    m_reg.emplace<Health>(m_player, Health{5.f, 5.f});
 
-    m_reg.emplace<Transform>(m_dummy);
-    m_reg.emplace<RigidBody>(m_dummy, RigidBody{dummyBody, 0.3f, 0.5f});
+    // ── Enemy spawns from TMX "spawns" object layer ───────────────────────
+    if (m_tileMap) {
+        for (const auto& ol : m_tileMap->objectLayers) {
+            if (ol.name != "spawns") continue;
+            for (const auto& obj : ol.objects) {
+                if (obj.type == "enemy_walker" ||
+                    obj.type == "enemy_flyer"  ||
+                    obj.type == "enemy_ranged") {
+                    spawnEnemyFromObject(obj);
+                }
+            }
+        }
+    }
 
-    auto& dsr = m_reg.emplace<SpriteRenderer>(m_dummy);
-    dsr.tex   = m_textures.get("dummy");
-    dsr.size  = {0.6f, 1.0f};
+    // ── Camera initial position (follow player spawn) ─────────────────────
+    m_camState.pos       = {playerSpawnPos.x, playerSpawnPos.y + 1.5f};
+    m_camState.camTarget = m_camState.pos;
+}
 
-    m_reg.emplace<Health>(m_dummy, Health{3.f, 3.f});
+void GameScene::spawnEnemyFromObject(const eng::map::MapObject& obj) {
+    // Resolve world position (center of spawn point)
+    const glm::vec2 localPos = m_tileMap->tiledToWorld(obj.pos, obj.size);
+    const glm::vec2 worldPos = kMapOrigin + localPos;
 
-    // Hurtbox sensor on dummy body
-    b2Fixture* hurtFix = m_physics.addSensorBox(
-        dummyBody, {0.f, 0.f}, 0.3f, 0.5f);
+    EnemyKind kind{EnemyKind::Walker};
+    if      (obj.type == "enemy_flyer")  kind = EnemyKind::Flyer;
+    else if (obj.type == "enemy_ranged") kind = EnemyKind::Ranged;
+
+    using namespace eng::physics;
+
+    const eng::ecs::Entity en = m_reg.create();
+    m_enemies.push_back(en);
+
+    float halfW = 0.25f, halfH = 0.45f, density = 4.f, friction = 0.2f;
+    bool  gravityOff = (kind == EnemyKind::Flyer);
+
+    b2Body* body = m_physics.createDynamicBox(worldPos, halfW, halfH, density, friction);
+    body->SetLinearDamping(gravityOff ? 2.f : 0.f);
+    body->SetFixedRotation(true);
+    if (gravityOff) body->SetGravityScale(0.f);
+    setBodyFilter(body, kCatEnemy, kMaskEnemy);
+
+    m_reg.emplace<Transform>(en);
+    m_reg.emplace<RigidBody>(en, RigidBody{body, halfW, halfH});
+
+    // Sprite renderer — we use dummy texture as placeholder; Fase G will replace
+    const char* texKey = (kind == EnemyKind::Flyer)  ? "enemy_flyer"
+                       : (kind == EnemyKind::Ranged) ? "enemy_ranged"
+                                                      : "enemy_walker";
+    auto& sr  = m_reg.emplace<SpriteRenderer>(en);
+    if (m_textures.has(texKey))
+        sr.tex = m_textures.get(texKey);
+    else
+        sr.tex = m_textures.get("dummy"); // fallback until Fase G adds enemy sheets
+    sr.size = {halfW * 2.f * 1.4f, halfH * 2.f * 1.2f};
+
+    // Hurtbox
+    b2Fixture* hurtFix = m_physics.addSensorBox(body, {0.f, 0.f}, halfW, halfH);
+    setFixtureFilter(hurtFix, kCatEnemy, kCatPlayerAttack);
     hurtFix->GetUserData().pointer =
-        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hurtbox, m_dummy));
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hurtbox, en));
+    auto& hb  = m_reg.emplace<Hurtbox>(en);
+    hb.fixture = hurtFix;
+    hb.owner   = en;
 
-    auto& hurtbox   = m_reg.emplace<Hurtbox>(m_dummy);
-    hurtbox.fixture = hurtFix;
-    hurtbox.owner   = m_dummy;
+    // Hitbox (attack sensor — offset to the right, facing will flip category later)
+    b2Fixture* hitFix = m_physics.addSensorBox(body, {halfW + 0.35f, 0.f}, 0.35f, 0.25f);
+    setFixtureFilter(hitFix, kCatEnemyAttack, kMaskEnemyAttack);
+    hitFix->GetUserData().pointer =
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hitbox, en));
+    auto& hx    = m_reg.emplace<Hitbox>(en);
+    hx.fixture  = hitFix;
+    hx.damage   = 1.f;
+    hx.knockback = {-3.f, 1.f}; // knock player back
 
-    // Player start camera state
-    m_camState.pos      = {0.f, 3.5f};
-    m_camState.camTarget = {0.f, 3.5f};
+    m_reg.emplace<Health>(en, Health{3.f, 3.f});
+
+    // EnemyAI component
+    auto& ai       = m_reg.emplace<EnemyAI>(en);
+    ai.kind        = kind;
+    ai.patrolMinX  = worldPos.x - 3.f;
+    ai.patrolMaxX  = worldPos.x + 3.f;
+    ai.visionRange = (kind == EnemyKind::Ranged) ? 8.f : 6.f;
+    ai.attackRange = (kind == EnemyKind::Ranged) ? 5.f : 1.4f;
+    ai.speed       = (kind == EnemyKind::Flyer)  ? 2.f : 2.5f;
+}
+
+eng::ecs::Entity GameScene::spawnProjectile(glm::vec2 from, glm::vec2 vel, float damage) {
+    using namespace eng::physics;
+
+    const eng::ecs::Entity en = m_reg.create();
+
+    b2Body* body = m_physics.createDynamicBox(from, 0.12f, 0.08f, 0.1f, 0.f);
+    body->SetGravityScale(0.f);
+    body->SetLinearDamping(0.f);
+    body->SetFixedRotation(true);
+    body->SetLinearVelocity(toB2(vel));
+    setBodyFilter(body, kCatEnemyAttack, kMaskEnemyAttack);
+
+    m_reg.emplace<Transform>(en);
+    m_reg.emplace<RigidBody>(en, RigidBody{body, 0.12f, 0.08f});
+    m_reg.emplace<Projectile>(en, Projectile{3.f, damage, false});
+
+    // Hitbox sensor on the projectile body
+    b2Fixture* hitFix = m_physics.addSensorBox(body, {0.f, 0.f}, 0.12f, 0.08f);
+    setFixtureFilter(hitFix, kCatEnemyAttack, kMaskEnemyAttack);
+    hitFix->GetUserData().pointer =
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hitbox, en));
+    auto& hx    = m_reg.emplace<Hitbox>(en);
+    hx.fixture  = hitFix;
+    hx.damage   = damage;
+    hx.knockback = {(vel.x > 0 ? 2.f : -2.f), 0.5f};
+    hx.active   = true; // always active
+
+    auto& sr  = m_reg.emplace<SpriteRenderer>(en);
+    sr.tex    = m_textures.get("dummy"); // placeholder until we have a bullet sprite
+    sr.size   = {0.2f, 0.15f};
+    sr.tint   = {1.f, 0.4f, 0.1f, 1.f}; // orange-ish tint
+
+    return en;
 }
 
 void GameScene::update(float dt, eng::core::App& app) {
@@ -160,12 +371,26 @@ void GameScene::update(float dt, eng::core::App& app) {
     if (input.pressed(eng::input::Action::ToggleDebug))
         m_debugDrawOn = !m_debugDrawOn;
 
+    // --- Player world position (used by enemy AI) ---
+    glm::vec2 playerPos{0.f, 0.f};
+    if (m_reg.valid(m_player) && m_reg.has<Transform>(m_player))
+        playerPos = glm::vec2{m_reg.get<Transform>(m_player).position};
+
     // --- Gameplay systems (use scaled dt) ---
     sys::playerControllerUpdate(m_reg, input, m_physics, gdt, m_clips);
     sys::animationUpdate(m_reg, gdt);
+
+    // Enemy AI (runs after animation so clip swaps take effect this frame)
+    auto spawnProj = [this](glm::vec2 from, glm::vec2 vel, float dmg) {
+        return spawnProjectile(from, vel, dmg);
+    };
+    sys::enemyAIUpdate(m_reg, m_physics, playerPos, gdt, m_clips, spawnProj);
+
     sys::combatPreUpdate(m_reg, gdt);
+    sys::enemyCombatPreUpdate(m_reg, gdt);
     m_physics.step(gdt);
     sys::physicsSyncUpdate(m_reg);
+    sys::projectileUpdate(m_reg, m_physics, gdt);
 
     // --- Combat post (resolve hits, apply callbacks) ---
     auto onHitStop = [this](float dur) { requestHitStop(dur); };
@@ -185,12 +410,25 @@ void GameScene::render() {
     glClearColor(0.05f, 0.04f, 0.08f, 1.f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    // Sprite pass
+    // 1. Parallax backgrounds (each layer owns its own begin/end)
+    eng::render::drawParallax(*m_batch, m_camera, m_parallax);
+
+    // 2. Tilemap (stone ground + wooden platforms)
+    if (m_tileMap && m_tilesetTex && !m_tileMap->tileLayers.empty()) {
+        const auto& ts = m_tileMap->tilesets[0];
+        m_batch->begin(m_camera);
+        eng::map::drawTileLayer(*m_batch, *m_tileMap, m_tileMap->tileLayers[0],
+                                *m_tilesetTex, ts, 32.f,
+                                kMapOrigin, -0.1f);
+        m_batch->end();
+    }
+
+    // 3. Entity sprites (player, enemies, projectiles)
     m_batch->begin(m_camera);
     sys::spriteRenderUpdate(m_reg, *m_batch);
     m_batch->end();
 
-    // Box2D debug draw (F1 toggle — shows hitbox/hurtbox sensors too)
+    // 4. Box2D debug draw (F1 toggle — shows hitbox/hurtbox sensors too)
     if (m_debugDrawOn) {
         m_physics.world().DebugDraw();
         m_dbgDraw->render(m_camera);

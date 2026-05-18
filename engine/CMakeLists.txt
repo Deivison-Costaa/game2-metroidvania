@@ -7,11 +7,14 @@ add_library(engine STATIC
     src/render/SpriteBatch.cpp
     src/render/Mesh.cpp
     src/render/MeshRenderer.cpp
+    src/render/ParallaxRenderer.cpp
     src/ecs/Registry.cpp
     src/input/InputManager.cpp
     src/physics/PhysicsWorld.cpp
     src/physics/DebugDraw.cpp
     src/animation/AnimationClip.cpp
+    src/map/TileMap.cpp
+    src/map/TileMapRenderer.cpp
 )
 
 target_include_directories(engine
@@ -31,6 +34,7 @@ target_link_libraries(engine
         Freetype::Freetype
         stb
         assimp::assimp
+        pugixml::pugixml
 )
 
 if(ENABLE_IMGUI AND TARGET imgui_lib)

@@ -1,0 +1,8 @@
+{
+    "name": "flyer_dead",
+    "loop": false,
+    "frames": [
+        { "uv": [0.50, 0.75, 0.75, 1.0], "duration": 0.20 },
+        { "uv": [0.75, 0.75, 1.00, 1.0], "duration": 0.20 }
+    ]
+}

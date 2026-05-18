@@ -1,9 +1,11 @@
 #pragma once
 #include "engine/animation/AnimationClip.h"
 #include "engine/ecs/Registry.h"
+#include "engine/map/TileMap.h"
 #include "engine/physics/DebugDraw.h"
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/render/Camera.h"
+#include "engine/render/ParallaxRenderer.h"
 #include "engine/render/SpriteBatch.h"
 #include "engine/resources/ResourceManager.h"
 #include "engine/render/Texture.h"
@@ -54,7 +56,20 @@ private:
     std::vector<std::unique_ptr<sys::FixtureUserData>> m_fixtureData;
 
     eng::ecs::Entity m_player{eng::ecs::kNullEntity};
-    eng::ecs::Entity m_dummy {eng::ecs::kNullEntity};
+
+    // M4 — TileMap + Parallax + Enemies
+    std::unique_ptr<eng::map::TileMap>      m_tileMap;
+    std::shared_ptr<eng::render::Texture>   m_tilesetTex;
+    std::vector<eng::render::ParallaxLayer> m_parallax;
+    std::vector<eng::ecs::Entity>           m_enemies;
+
+    // Offset that maps the TMX bottom-left to world (0,0)
+    // Ground-top surface sits at world y=0 with this value
+    static constexpr glm::vec2 kMapOrigin{-20.f, -2.f};
+
+    // Spawn helpers (called from buildLevel after TMX is loaded)
+    void spawnEnemyFromObject(const eng::map::MapObject& obj);
+    eng::ecs::Entity spawnProjectile(glm::vec2 from, glm::vec2 vel, float damage);
 
     float m_timeScale   {1.f};  // 0 during hit-stop, 1 normally
     float m_hitStopTimer{0.f};

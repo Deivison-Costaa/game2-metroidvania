@@ -57,7 +57,7 @@ cmake --build build -j$(nproc)
 | M1 | Renderer 2D + 3D (SpriteBatch, MeshRenderer, Camera) | ✅ |
 | M2 | ECS + Physics (Box2D) + Input | ✅ |
 | M3 | Animation StateMachine + Combate data-driven + Câmera cinematográfica | ✅ |
-| M4 | Inimigos com IA FSM + Tiled (.tmx) | 🔜 |
+| M4 | Inimigos com IA FSM + Tiled (.tmx) + Paralaxe + raycastAny | ✅ |
 | M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | 🔜 |
 | M6 | Áudio + UI + Save/Load + Mini-boss | 🔜 |
 | M7 | Polish + Assets finais + Color grade | 🔜 |

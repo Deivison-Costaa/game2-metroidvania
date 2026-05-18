@@ -4,6 +4,14 @@
 
 namespace eng::physics {
 
+struct RaycastHit {
+    bool       hit      {false};
+    b2Fixture* fixture  {nullptr};
+    glm::vec2  point    {0.f, 0.f};
+    glm::vec2  normal   {0.f, 0.f};
+    float      fraction {0.f};
+};
+
 // Wrapper around b2World with a fixed-step accumulator (60 Hz).
 // All positions are in meters. Use PhysicsConstants.h for conversions.
 class PhysicsWorld {
@@ -34,6 +42,11 @@ public:
     // True if any non-sensor fixture is touching the ground below the body.
     // Casts a short ray from center downward by (halfH + eps).
     bool isOnGround(b2Body* body, float halfH, float eps = 0.05f) const;
+
+    // Cast a ray from 'from' to 'to' (both in meters) and return the first
+    // non-sensor hit. Sensors and fixtures belonging to 'skip' are ignored.
+    RaycastHit raycastAny(glm::vec2 from, glm::vec2 to,
+                          b2Body* skip = nullptr) const;
 
     // Register an external contact listener (replaces any previous one).
     void setContactListener(b2ContactListener* listener);

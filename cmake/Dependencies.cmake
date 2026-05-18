@@ -30,6 +30,21 @@ find_package(assimp REQUIRED)
 # Box2D — physics (used from M2 onwards)
 find_package(box2d REQUIRED)
 
+# ─── pugixml — XML parser for Tiled .tmx map loading (M4+) ──────────────────
+find_package(pugixml CONFIG QUIET)
+if(NOT pugixml_FOUND)
+    message(STATUS "pugixml not found on system — fetching via FetchContent")
+    FetchContent_Declare(pugixml
+        GIT_REPOSITORY https://github.com/zeux/pugixml.git
+        GIT_TAG        v1.14
+        GIT_SHALLOW    TRUE
+    )
+    set(PUGIXML_BUILD_TESTS OFF CACHE INTERNAL "")
+    FetchContent_MakeAvailable(pugixml)
+else()
+    message(STATUS "pugixml found on system")
+endif()
+
 # ─── GLM — math, header-only ─────────────────────────────────────────────────
 find_package(glm QUIET)
 if(NOT glm_FOUND)
