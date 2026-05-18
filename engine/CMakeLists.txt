@@ -8,6 +8,10 @@ add_library(engine STATIC
     src/render/Mesh.cpp
     src/render/MeshRenderer.cpp
     src/render/ParallaxRenderer.cpp
+    src/render/Framebuffer.cpp
+    src/render/FullscreenQuad.cpp
+    src/render/PostProcessStack.cpp
+    src/render/ParticleSystem.cpp
     src/ecs/Registry.cpp
     src/input/InputManager.cpp
     src/physics/PhysicsWorld.cpp

@@ -28,6 +28,7 @@
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
+#include <cstdlib>
 
 // Fixture user-data helper — allocate once, keep alive in m_fixtureData
 static sys::FixtureUserData* makeFixtureUD(
@@ -49,13 +50,22 @@ static sys::FixtureUserData* makeFixtureUD(
 //  Dummy:      start (3,  0.5), half (0.30, 0.5) — 0.6m wide, 1m tall
 
 void GameScene::init(eng::core::App& app) {
-    const float w = static_cast<float>(app.window().width());
-    const float h = static_cast<float>(app.window().height());
+    const int   wi = app.window().width();
+    const int   hi = app.window().height();
+    const float w  = static_cast<float>(wi);
+    const float h  = static_cast<float>(hi);
     m_camera = eng::render::Camera::perspective(glm::radians(30.f), w / h, 0.1f, 200.f);
 
     m_batchOwner = std::make_unique<eng::render::SpriteBatch>(
         ASSET_ROOT "/shaders/sprite.vert", ASSET_ROOT "/shaders/sprite.frag");
     m_batch = m_batchOwner.get();
+
+    // M5 — Post-process stack (HDR FBO + bloom + god rays + ACES) + particles
+    m_postFx = std::make_unique<eng::render::PostProcessStack>(
+        wi, hi, std::string(ASSET_ROOT) + "/shaders");
+    m_particleSys = std::make_unique<eng::render::ParticleSystem>(
+        std::string(ASSET_ROOT) + "/shaders",
+        std::string(ASSET_ROOT) + "/assets/sprites/particle_spark.png");
 
     m_dbgDrawOwner = std::make_unique<eng::physics::DebugDraw>(
         ASSET_ROOT "/shaders/debug_line.vert", ASSET_ROOT "/shaders/debug_line.frag");
@@ -142,7 +152,7 @@ void GameScene::init(eng::core::App& app) {
 
     buildLevel();
 
-    LOG_INFO("M4 ready — A/D move | Space jump | J attack | F1 debug | ESC quit");
+    LOG_INFO("M5 ready — A/D move | Space jump | J attack | F1 debug | ESC quit");
 }
 
 // Helper: set category/mask filter on every fixture of a body
@@ -384,18 +394,24 @@ void GameScene::update(float dt, eng::core::App& app) {
     auto spawnProj = [this](glm::vec2 from, glm::vec2 vel, float dmg) {
         return spawnProjectile(from, vel, dmg);
     };
-    sys::enemyAIUpdate(m_reg, m_physics, playerPos, gdt, m_clips, spawnProj);
+    auto onEnemyDeath = [this](glm::vec3 pos, int kind) {
+        m_particleSys->spawn(eng::render::ParticleKind::DeathBurst, pos, kind);
+    };
+    sys::enemyAIUpdate(m_reg, m_physics, playerPos, gdt, m_clips, spawnProj, onEnemyDeath);
 
     sys::combatPreUpdate(m_reg, gdt);
     sys::enemyCombatPreUpdate(m_reg, gdt);
     m_physics.step(gdt);
     sys::physicsSyncUpdate(m_reg);
-    sys::projectileUpdate(m_reg, m_physics, gdt);
+    sys::projectileUpdate(m_reg, m_physics, m_particleSys.get(), gdt);
 
     // --- Combat post (resolve hits, apply callbacks) ---
-    auto onHitStop = [this](float dur) { requestHitStop(dur); };
-    auto onTrauma  = [this](float amt) { sys::cameraAddTrauma(m_camState, amt); };
-    sys::combatPostUpdate(m_reg, m_contactListener, onHitStop, onTrauma);
+    auto onHitStop  = [this](float dur) { requestHitStop(dur); };
+    auto onTrauma   = [this](float amt) { sys::cameraAddTrauma(m_camState, amt); };
+    auto onHitSpark = [this](glm::vec3 pos) {
+        m_particleSys->spawn(eng::render::ParticleKind::HitSpark, pos);
+    };
+    sys::combatPostUpdate(m_reg, m_contactListener, onHitStop, onTrauma, onHitSpark);
 
     // --- Camera (uses real dt — continues animating during hit-stop) ---
     if (m_reg.valid(m_player)) {
@@ -404,16 +420,35 @@ void GameScene::update(float dt, eng::core::App& app) {
         const bool  atk  = (ctrl.state == PlayerState::Attack);
         sys::cameraUpdate(m_camState, t.position, ctrl.facing, atk, dt, m_camera);
     }
+
+    // --- Particles ---
+    m_particleSys->update(dt);
+
+    // Ambient dust: 8 particles/second scattered over the map area
+    m_dustTimer += dt;
+    constexpr float kDustInterval = 1.f / 8.f;
+    while (m_dustTimer >= kDustInterval) {
+        m_dustTimer -= kDustInterval;
+        const float rx = kMapOrigin.x + static_cast<float>(rand() % 400) / 10.f;
+        const float ry = static_cast<float>(rand() % 60) / 10.f; // 0..6m height
+        m_particleSys->spawn(eng::render::ParticleKind::Dust,
+                             {rx, ry, -1.5f});
+    }
 }
 
 void GameScene::render() {
-    glClearColor(0.05f, 0.04f, 0.08f, 1.f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+    // ── HDR pass: scene → m_postFx's HDR FBO ─────────────────────────────────
+    m_postFx->beginScene();
 
-    // 1. Parallax backgrounds (each layer owns its own begin/end)
+    // Set fog uniforms on the sprite shader once (persist across begin/end cycles)
+    m_batch->shader().bind();
+    m_batch->shader().set("uFogDensity", m_postFx->fogDensity());
+    m_batch->shader().set("uFogColor",   m_postFx->fogColor());
+
+    // 1. Parallax backgrounds
     eng::render::drawParallax(*m_batch, m_camera, m_parallax);
 
-    // 2. Tilemap (stone ground + wooden platforms)
+    // 2. Tilemap
     if (m_tileMap && m_tilesetTex && !m_tileMap->tileLayers.empty()) {
         const auto& ts = m_tileMap->tilesets[0];
         m_batch->begin(m_camera);
@@ -428,7 +463,13 @@ void GameScene::render() {
     sys::spriteRenderUpdate(m_reg, *m_batch);
     m_batch->end();
 
-    // 4. Box2D debug draw (F1 toggle — shows hitbox/hurtbox sensors too)
+    // 4. Particles (rendered inside HDR pass so they feed bloom)
+    m_particleSys->render(m_camera);
+
+    // ── Post-process: bloom + god rays + ACES tonemap → default FB ───────────
+    m_postFx->endSceneAndComposite(m_camera, kSunWorldPos);
+
+    // ── Overlays (rendered directly to default FB — outside HDR) ─────────────
     if (m_debugDrawOn) {
         m_physics.world().DebugDraw();
         m_dbgDraw->render(m_camera);
@@ -438,8 +479,9 @@ void GameScene::render() {
 void GameScene::handleEvent(const SDL_Event& ev) {
     if (ev.type == SDL_WINDOWEVENT &&
         ev.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
-        const float w = static_cast<float>(ev.window.data1);
-        const float h = static_cast<float>(ev.window.data2);
-        m_camera.setAspect(w / h);
+        const int   wi = ev.window.data1;
+        const int   hi = ev.window.data2;
+        m_camera.setAspect(static_cast<float>(wi) / static_cast<float>(hi));
+        if (m_postFx) m_postFx->resize(wi, hi);
     }
 }

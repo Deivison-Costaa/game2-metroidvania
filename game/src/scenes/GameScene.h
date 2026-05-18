@@ -6,6 +6,8 @@
 #include "engine/physics/PhysicsWorld.h"
 #include "engine/render/Camera.h"
 #include "engine/render/ParallaxRenderer.h"
+#include "engine/render/ParticleSystem.h"
+#include "engine/render/PostProcessStack.h"
 #include "engine/render/SpriteBatch.h"
 #include "engine/resources/ResourceManager.h"
 #include "engine/render/Texture.h"
@@ -70,6 +72,14 @@ private:
     // Spawn helpers (called from buildLevel after TMX is loaded)
     void spawnEnemyFromObject(const eng::map::MapObject& obj);
     eng::ecs::Entity spawnProjectile(glm::vec2 from, glm::vec2 vel, float damage);
+
+    // M5 — Post-process stack + particles
+    std::unique_ptr<eng::render::PostProcessStack> m_postFx;
+    std::unique_ptr<eng::render::ParticleSystem>   m_particleSys;
+    float m_dustTimer{0.f};  // accumulator for ambient dust emission
+
+    // Sun world position for god rays (fixed artistic choice: upper-right background)
+    static constexpr glm::vec3 kSunWorldPos{25.f, 10.f, -5.f};
 
     float m_timeScale   {1.f};  // 0 during hit-stop, 1 normally
     float m_hitStopTimer{0.f};

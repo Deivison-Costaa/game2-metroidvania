@@ -8,11 +8,14 @@ uniform mat4 uModel;
 uniform mat4 uView;
 uniform mat4 uProj;
 
-out vec3 vWorldNormal;
-out vec2 vUV;
+out vec3  vWorldNormal;
+out vec2  vUV;
+out float vWorldDepth; // -world Z (positive = further back)
 
 void main() {
-    vWorldNormal = normalize(mat3(transpose(inverse(uModel))) * aNormal);
-    vUV          = aUV;
-    gl_Position  = uProj * uView * uModel * vec4(aPos, 1.0);
+    vec3 worldPos    = vec3(uModel * vec4(aPos, 1.0));
+    vWorldNormal     = normalize(mat3(transpose(inverse(uModel))) * aNormal);
+    vUV              = aUV;
+    vWorldDepth      = -worldPos.z;
+    gl_Position      = uProj * uView * vec4(worldPos, 1.0);
 }

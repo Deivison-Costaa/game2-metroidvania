@@ -5,6 +5,7 @@
 #include "components/PlayerControl.h"
 #include "components/RigidBody.h"
 #include "components/SpriteRenderer.h"
+#include "components/Transform.h"
 #include "engine/physics/PhysicsConstants.h"
 #include <algorithm>
 #include <cstdint>
@@ -60,7 +61,8 @@ void combatPreUpdate(eng::ecs::Registry& reg, float dt) {
 
         if (hp.flashTimer > 0.f) {
             const float t = hp.flashTimer / kFlashDuration;
-            sr.tint = {1.f, 1.f - t * 0.6f, 1.f - t * 0.6f, 1.f}; // red flash
+            // HDR tint > 1 feeds the bloom pass for a bright damage flash
+            sr.tint = {3.f * t + 1.f, 1.f - t * 0.8f, 1.f - t * 0.8f, 1.f};
         } else {
             sr.tint = {1.f, 1.f, 1.f, hp.dead ? 0.3f : 1.f};
         }
@@ -100,7 +102,8 @@ void combatPostUpdate(
     eng::ecs::Registry& reg,
     CombatContactListener& listener,
     const std::function<void(float)>& onHitStop,
-    const std::function<void(float)>& onTrauma)
+    const std::function<void(float)>& onTrauma,
+    const std::function<void(glm::vec3)>& onHitSpark)
 {
     for (auto& ev : listener.events()) {
         // Validate both entities still exist
@@ -149,6 +152,10 @@ void combatPostUpdate(
         // Trigger game-feel callbacks
         if (onHitStop) onHitStop(0.06f);
         if (onTrauma)  onTrauma(0.65f);
+
+        // Spawn hit-spark particles at victim position
+        if (onHitSpark && reg.has<Transform>(ev.victim))
+            onHitSpark(reg.get<Transform>(ev.victim).position);
     }
 
     listener.clearEvents();

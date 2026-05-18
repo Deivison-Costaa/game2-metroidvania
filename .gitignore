@@ -22,6 +22,7 @@ maps/*.tmx
 !assets/sprites/test.png
 !assets/sprites/player_sheet.png
 !assets/sprites/dummy.png
+!assets/sprites/particle_spark.png
 !assets/tilesets/.gitkeep
 !assets/models/.gitkeep
 !assets/models/cube.obj

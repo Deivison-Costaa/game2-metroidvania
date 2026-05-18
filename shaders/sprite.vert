@@ -8,9 +8,11 @@ uniform mat4 uViewProj;
 
 out vec2  vUV;
 out vec4  vColor;
+out float vWorldDepth; // -Z in world space (positive = further back)
 
 void main() {
-    vUV         = aUV;
-    vColor      = aColor;
+    vUV        = aUV;
+    vColor     = aColor;
+    vWorldDepth = -aPos.z; // negative Z = background parallax layers
     gl_Position = uViewProj * vec4(aPos, 1.0);
 }

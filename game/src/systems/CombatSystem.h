@@ -3,6 +3,7 @@
 #include "engine/physics/PhysicsWorld.h"
 #include <box2d/box2d.h>
 #include <functional>
+#include <glm/glm.hpp>
 #include <vector>
 
 namespace sys {
@@ -40,11 +41,13 @@ void combatPreUpdate(eng::ecs::Registry& reg, float dt);
 
 // Call after physics.step() to apply damage, knockback, flash, and invoke callbacks.
 // onHitStop: receives duration in seconds — set your scene's m_timeScale accordingly.
-// onTrauma: receives trauma amount [0..1] for the camera shake system.
+// onTrauma:  receives trauma amount [0..1] for the camera shake system.
+// onHitSpark: receives world-space hit position for particle spawn (optional).
 void combatPostUpdate(
     eng::ecs::Registry& reg,
     CombatContactListener& listener,
     const std::function<void(float)>& onHitStop,
-    const std::function<void(float)>& onTrauma);
+    const std::function<void(float)>& onTrauma,
+    const std::function<void(glm::vec3)>& onHitSpark = {});
 
 } // namespace sys

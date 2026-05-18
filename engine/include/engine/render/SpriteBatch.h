@@ -43,6 +43,10 @@ public:
 
     void end();
 
+    // Exposes the underlying shader so callers can set per-frame uniforms
+    // (e.g., fog density) before begin/end cycles. Uniforms persist until reset.
+    Shader& shader() { return m_shader; }
+
 private:
     struct Vertex {
         glm::vec3 pos;

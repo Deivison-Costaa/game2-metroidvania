@@ -7,6 +7,7 @@
 #include "components/SpriteRenderer.h"
 #include "components/Transform.h"
 #include "components/Animator.h"
+#include "engine/core/Log.h"
 #include "engine/physics/PhysicsConstants.h"
 #include "engine/physics/CollisionCategories.h"
 #include "engine/core/Log.h"
@@ -315,7 +316,8 @@ void enemyAIUpdate(eng::ecs::Registry& reg,
                    glm::vec2 playerPos,
                    float dt,
                    eng::resources::ResourceManager<eng::animation::AnimationClip>& clips,
-                   const SpawnProjectileFn& spawnProjectile)
+                   const SpawnProjectileFn& spawnProjectile,
+                   const OnEnemyDeathFn& onDeath)
 {
     // Collect dead entities to destroy after iteration
     std::vector<eng::ecs::Entity> toDestroy;
@@ -332,8 +334,12 @@ void enemyAIUpdate(eng::ecs::Registry& reg,
         // Invulnerability after hurt (handled via Health)
         if (reg.has<Health>(e)) {
             auto& hp = reg.get<Health>(e);
-            if (hp.dead && ai.state != EnemyState::Dead)
+            if (hp.dead && ai.state != EnemyState::Dead) {
                 transitionState(ai, EnemyState::Dead, e, reg, clips);
+                if (onDeath && reg.has<Transform>(e))
+                    onDeath(reg.get<Transform>(e).position,
+                            static_cast<int>(ai.kind));
+            }
         }
 
         switch (ai.kind) {
