@@ -5,6 +5,8 @@
 #include "engine/input/Action.h"
 #include <algorithm>
 #include <cmath>
+#include <functional>
+#include <string>
 
 namespace sys {
 
@@ -25,7 +27,8 @@ void playerControllerUpdate(
     const eng::input::InputManager& input,
     eng::physics::PhysicsWorld& physics,
     float dt,
-    eng::resources::ResourceManager<eng::animation::AnimationClip>& clips)
+    eng::resources::ResourceManager<eng::animation::AnimationClip>& clips,
+    const std::function<void(const std::string&)>& onSfx)
 {
     for (auto [e, ctrl, rb] : reg.view<PlayerControl, RigidBody>()) {
         if (!rb.body) continue;
@@ -63,6 +66,7 @@ void playerControllerUpdate(
                 rb.body->SetLinearVelocity(vel);
                 ctrl.jumpBufferTimer = 0.f;
                 ctrl.coyoteTimer     = 0.f;
+                if (onSfx) onSfx("jump");
             }
         }
 
@@ -86,6 +90,7 @@ void playerControllerUpdate(
         // --- Attack input ---
         if (input.pressed(eng::input::Action::Attack) && ctrl.attackTimer <= 0.f) {
             ctrl.attackTimer = ctrl.attackDuration;
+            if (onSfx) onSfx("attack");
         }
 
         // --- State transition ---
@@ -104,6 +109,13 @@ void playerControllerUpdate(
 
         // On state change: swap animation clip and reset animator
         if (newState != ctrl.state) {
+            // Landing SFX: was airborne, now grounded
+            const bool wasAirborne = (ctrl.state == PlayerState::Jump ||
+                                      ctrl.state == PlayerState::Fall);
+            const bool nowGrounded = (newState == PlayerState::Idle ||
+                                      newState == PlayerState::Run);
+            if (wasAirborne && nowGrounded && onSfx) onSfx("land");
+
             ctrl.state     = newState;
             ctrl.stateTime = 0.f;
 

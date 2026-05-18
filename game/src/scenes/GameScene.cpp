@@ -18,10 +18,15 @@
 #include "systems/PlayerControllerSystem.h"
 #include "systems/ProjectileSystem.h"
 #include "systems/SpriteRenderSystem.h"
+#include "engine/audio/AudioEngine.h"
 #include "engine/core/App.h"
 #include "engine/core/Log.h"
 #include "engine/input/Action.h"
 #include "engine/map/TileMapRenderer.h"
+#include "engine/save/SaveSystem.h"
+#include "components/BossPhaseData.h"
+#include "systems/BossLogic.h"
+#include "data/BossAttackTable.h"
 #include "engine/physics/CollisionCategories.h"
 #include "engine/physics/PhysicsConstants.h"
 #include "engine/render/ParallaxRenderer.h"
@@ -113,6 +118,23 @@ void GameScene::init(eng::core::App& app) {
     m_clips.load("ranged_hurt",   ASSET_ROOT "/assets/data/enemy_ranged_hurt.json");
     m_clips.load("ranged_dead",   ASSET_ROOT "/assets/data/enemy_ranged_dead.json");
 
+    // Boss texture + clips
+    m_textures.load("boss",
+        ASSET_ROOT "/assets/sprites/boss.png",
+        eng::render::TextureFilter::Nearest);
+    m_clips.load("boss_stance_idle",       ASSET_ROOT "/assets/data/boss_stance_idle.json");
+    m_clips.load("boss_stance_slash",      ASSET_ROOT "/assets/data/boss_stance_slash.json");
+    m_clips.load("boss_enrage_slash",      ASSET_ROOT "/assets/data/boss_enrage_slash.json");
+    m_clips.load("boss_desperate_radial",  ASSET_ROOT "/assets/data/boss_desperate_radial.json");
+    m_clips.load("boss_hurt",              ASSET_ROOT "/assets/data/boss_hurt.json");
+    m_clips.load("boss_dead",              ASSET_ROOT "/assets/data/boss_dead.json");
+    m_bossTable = data::BossAttackTable::fromFile(
+        ASSET_ROOT "/assets/data/boss_attacks.json");
+
+    // HUD
+    m_hud = std::make_unique<Hud>();
+    m_hud->init(wi, hi);
+
     // Tileset texture
     m_textures.load("tileset",
         ASSET_ROOT "/assets/tilesets/test_tileset.png",
@@ -152,7 +174,10 @@ void GameScene::init(eng::core::App& app) {
 
     buildLevel();
 
-    LOG_INFO("M5 ready — A/D move | Space jump | J attack | F1 debug | ESC quit");
+    // Start ambient music loop
+    eng::audio::AudioEngine::instance().playMusic("ambient_loop.wav");
+
+    LOG_INFO("M6 ready — A/D move | Space jump | J attack | F1 debug | F5 save | F9 load | ESC quit");
 }
 
 // Helper: set category/mask filter on every fixture of a body
@@ -247,7 +272,7 @@ void GameScene::buildLevel() {
     playerHurtbox.owner   = m_player;
     m_reg.emplace<Health>(m_player, Health{5.f, 5.f});
 
-    // ── Enemy spawns from TMX "spawns" object layer ───────────────────────
+    // ── Enemy + boss spawns from TMX "spawns" object layer ───────────────────
     if (m_tileMap) {
         for (const auto& ol : m_tileMap->objectLayers) {
             if (ol.name != "spawns") continue;
@@ -256,6 +281,8 @@ void GameScene::buildLevel() {
                     obj.type == "enemy_flyer"  ||
                     obj.type == "enemy_ranged") {
                     spawnEnemyFromObject(obj);
+                } else if (obj.type == "miniboss") {
+                    spawnMiniBossFromObject(obj);
                 }
             }
         }
@@ -334,6 +361,62 @@ void GameScene::spawnEnemyFromObject(const eng::map::MapObject& obj) {
     ai.speed       = (kind == EnemyKind::Flyer)  ? 2.f : 2.5f;
 }
 
+void GameScene::spawnMiniBossFromObject(const eng::map::MapObject& obj) {
+    using namespace eng::physics;
+
+    const glm::vec2 worldPos = kMapOrigin + m_tileMap->tiledToWorld(obj.pos, obj.size);
+
+    m_miniBoss = m_reg.create();
+
+    const float halfW = 0.5f, halfH = 0.8f;
+    b2Body* body = m_physics.createDynamicBox(worldPos, halfW, halfH, 8.f, 0.2f);
+    body->SetLinearDamping(0.f);
+    body->SetFixedRotation(true);
+    setBodyFilter(body, kCatEnemy, kMaskEnemy);
+
+    m_reg.emplace<Transform>(m_miniBoss);
+    m_reg.emplace<RigidBody>(m_miniBoss, RigidBody{body, halfW, halfH});
+
+    auto& sr  = m_reg.emplace<SpriteRenderer>(m_miniBoss);
+    sr.tex    = m_textures.has("boss") ? m_textures.get("boss") : m_textures.get("dummy");
+    sr.size   = {halfW * 2.f * 1.4f, halfH * 2.f * 1.2f};
+
+    // Hurtbox
+    b2Fixture* hurtFix = m_physics.addSensorBox(body, {0.f, 0.f}, halfW, halfH);
+    setFixtureFilter(hurtFix, kCatEnemy, kCatPlayerAttack);
+    hurtFix->GetUserData().pointer =
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hurtbox, m_miniBoss));
+    auto& hb  = m_reg.emplace<Hurtbox>(m_miniBoss);
+    hb.fixture = hurtFix;
+    hb.owner   = m_miniBoss;
+
+    // Hitbox (melee)
+    b2Fixture* hitFix = m_physics.addSensorBox(body, {halfW + 0.5f, 0.f}, 0.5f, 0.4f);
+    setFixtureFilter(hitFix, kCatEnemyAttack, kMaskEnemyAttack);
+    hitFix->GetUserData().pointer =
+        reinterpret_cast<uintptr_t>(makeFixtureUD(m_fixtureData, sys::FixtureTag::Hitbox, m_miniBoss));
+    auto& hx    = m_reg.emplace<Hitbox>(m_miniBoss);
+    hx.fixture  = hitFix;
+    hx.damage   = 2.f;
+    hx.knockback = {-5.f, 2.f};
+
+    m_reg.emplace<Health>(m_miniBoss, Health{30.f, 30.f});
+
+    auto& ai       = m_reg.emplace<EnemyAI>(m_miniBoss);
+    ai.kind        = EnemyKind::MiniBoss;
+    ai.patrolMinX  = worldPos.x - 5.f;
+    ai.patrolMaxX  = worldPos.x + 5.f;
+    ai.visionRange = 14.f;
+    ai.attackRange = 1.8f;
+    ai.speed       = 2.f;
+
+    m_reg.emplace<BossPhaseData>(m_miniBoss);
+    m_reg.emplace<Animator>(m_miniBoss,
+        Animator{m_clips.get("boss_stance_idle")});
+
+    m_hud->setBossVisible(true);
+}
+
 eng::ecs::Entity GameScene::spawnProjectile(glm::vec2 from, glm::vec2 vel, float damage) {
     using namespace eng::physics;
 
@@ -381,13 +464,19 @@ void GameScene::update(float dt, eng::core::App& app) {
     if (input.pressed(eng::input::Action::ToggleDebug))
         m_debugDrawOn = !m_debugDrawOn;
 
+    // Save / Load
+    if (input.pressed(eng::input::Action::SaveGame))  doSave();
+    if (input.pressed(eng::input::Action::LoadGame))  doLoad();
+
     // --- Player world position (used by enemy AI) ---
     glm::vec2 playerPos{0.f, 0.f};
     if (m_reg.valid(m_player) && m_reg.has<Transform>(m_player))
         playerPos = glm::vec2{m_reg.get<Transform>(m_player).position};
 
     // --- Gameplay systems (use scaled dt) ---
-    sys::playerControllerUpdate(m_reg, input, m_physics, gdt, m_clips);
+    auto& audio = eng::audio::AudioEngine::instance();
+    auto onSfx = [&audio](const std::string& sfxName) { audio.playSfx(sfxName); };
+    sys::playerControllerUpdate(m_reg, input, m_physics, gdt, m_clips, onSfx);
     sys::animationUpdate(m_reg, gdt);
 
     // Enemy AI (runs after animation so clip swaps take effect this frame)
@@ -411,7 +500,11 @@ void GameScene::update(float dt, eng::core::App& app) {
     auto onHitSpark = [this](glm::vec3 pos) {
         m_particleSys->spawn(eng::render::ParticleKind::HitSpark, pos);
     };
-    sys::combatPostUpdate(m_reg, m_contactListener, onHitStop, onTrauma, onHitSpark);
+    auto onDamageDealt = [&audio, this](glm::vec3 pos, float dmg) {
+        audio.playSfx("hit");
+        if (m_hud) m_hud->pushDamagePopup(pos, dmg);
+    };
+    sys::combatPostUpdate(m_reg, m_contactListener, onHitStop, onTrauma, onHitSpark, onDamageDealt);
 
     // --- Camera (uses real dt — continues animating during hit-stop) ---
     if (m_reg.valid(m_player)) {
@@ -420,6 +513,35 @@ void GameScene::update(float dt, eng::core::App& app) {
         const bool  atk  = (ctrl.state == PlayerState::Attack);
         sys::cameraUpdate(m_camState, t.position, ctrl.facing, atk, dt, m_camera);
     }
+
+    // --- Mini-boss update ---
+    if (m_reg.valid(m_miniBoss)) {
+        auto spawnProjBoss = [this](glm::vec2 from, glm::vec2 vel, float dmg) {
+            return spawnProjectile(from, vel, dmg);
+        };
+        auto onPhaseChange = [this](BossPhase /*prev*/, BossPhase /*next*/) {
+            requestHitStop(0.15f);
+            sys::cameraAddTrauma(m_camState, 0.7f);
+            eng::audio::AudioEngine::instance().playSfx("hit");
+            if (m_hud) m_hud->onBossPhaseChange();
+        };
+        auto onBossDeath = [this](glm::vec3 pos) {
+            m_particleSys->spawn(eng::render::ParticleKind::DeathBurst, pos, 1);
+            if (m_hud) m_hud->setBossVisible(false);
+            doSave();
+        };
+        sys::updateMiniBoss(m_miniBoss, m_reg, m_physics, playerPos, gdt,
+                            m_bossTable, m_clips, spawnProjBoss,
+                            onPhaseChange, onBossDeath);
+    }
+
+    // --- HUD update ---
+    m_playtime += gdt;
+    if (m_hud) m_hud->update(gdt);
+
+    // --- Damage popup wire-up (re-bind each frame; callbacks captured by ref) ---
+    // (Note: onDamageDealt above already calls audio; Hud popup is added via the
+    //  combatPostUpdate overload that also calls onDamageDealt with worldPos.)
 
     // --- Particles ---
     m_particleSys->update(dt);
@@ -469,6 +591,10 @@ void GameScene::render() {
     // ── Post-process: bloom + god rays + ACES tonemap → default FB ───────────
     m_postFx->endSceneAndComposite(m_camera, kSunWorldPos);
 
+    // ── HUD (screen-space, default FB, after post-process) ───────────────────
+    if (m_hud)
+        m_hud->render(*m_batch, m_camera, m_reg, m_player, m_miniBoss);
+
     // ── Overlays (rendered directly to default FB — outside HDR) ─────────────
     if (m_debugDrawOn) {
         m_physics.world().DebugDraw();
@@ -483,5 +609,64 @@ void GameScene::handleEvent(const SDL_Event& ev) {
         const int   hi = ev.window.data2;
         m_camera.setAspect(static_cast<float>(wi) / static_cast<float>(hi));
         if (m_postFx) m_postFx->resize(wi, hi);
+        if (m_hud)    m_hud->resize(wi, hi);
     }
+}
+
+void GameScene::doSave() {
+    eng::save::SaveData sd;
+    sd.playtime = m_playtime;
+
+    if (m_reg.valid(m_player)) {
+        if (m_reg.has<Transform>(m_player)) {
+            const auto& t = m_reg.get<Transform>(m_player);
+            sd.player.pos = glm::vec2{t.position};
+        }
+        if (m_reg.has<Health>(m_player)) {
+            sd.player.hp = m_reg.get<Health>(m_player).current;
+        }
+    }
+
+    // Mark defeated enemies (those with Health::dead == true)
+    for (auto en : m_enemies) {
+        if (!m_reg.valid(en)) continue;
+        if (m_reg.has<Health>(en) && m_reg.get<Health>(en).dead)
+            sd.defeated.push_back("enemy_" + std::to_string(en.id));
+    }
+    if (m_reg.valid(m_miniBoss) && m_reg.has<Health>(m_miniBoss)) {
+        if (m_reg.get<Health>(m_miniBoss).dead)
+            sd.defeated.push_back("miniboss");
+    }
+
+    // Carry over existing settings (volume etc.)
+    sd.settings = m_saveData.settings;
+
+    eng::save::SaveSystem::save(sd);
+    m_saveData = sd;
+    LOG_INFO("Saved to {}", eng::save::SaveSystem::savePath());
+}
+
+void GameScene::doLoad() {
+    auto opt = eng::save::SaveSystem::load();
+    if (!opt) {
+        LOG_INFO("No save file found.");
+        return;
+    }
+    m_saveData = *opt;
+    m_playtime = m_saveData.playtime;
+
+    if (m_reg.valid(m_player)) {
+        if (m_reg.has<RigidBody>(m_player)) {
+            auto& rb = m_reg.get<RigidBody>(m_player);
+            rb.body->SetTransform(
+                {m_saveData.player.pos.x, m_saveData.player.pos.y}, 0.f);
+            rb.body->SetLinearVelocity({0.f, 0.f});
+        }
+        if (m_reg.has<Health>(m_player)) {
+            m_reg.get<Health>(m_player).current = m_saveData.player.hp;
+            m_reg.get<Health>(m_player).dead    = false;
+        }
+    }
+
+    LOG_INFO("Loaded save (playtime={}s)", m_saveData.playtime);
 }

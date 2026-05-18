@@ -103,7 +103,8 @@ void combatPostUpdate(
     CombatContactListener& listener,
     const std::function<void(float)>& onHitStop,
     const std::function<void(float)>& onTrauma,
-    const std::function<void(glm::vec3)>& onHitSpark)
+    const std::function<void(glm::vec3)>& onHitSpark,
+    const std::function<void(glm::vec3, float)>& onDamageDealt)
 {
     for (auto& ev : listener.events()) {
         // Validate both entities still exist
@@ -153,9 +154,12 @@ void combatPostUpdate(
         if (onHitStop) onHitStop(0.06f);
         if (onTrauma)  onTrauma(0.65f);
 
-        // Spawn hit-spark particles at victim position
-        if (onHitSpark && reg.has<Transform>(ev.victim))
-            onHitSpark(reg.get<Transform>(ev.victim).position);
+        glm::vec3 victimPos{0.f};
+        if (reg.has<Transform>(ev.victim))
+            victimPos = reg.get<Transform>(ev.victim).position;
+
+        if (onHitSpark)     onHitSpark(victimPos);
+        if (onDamageDealt)  onDamageDealt(victimPos, ev.damage);
     }
 
     listener.clearEvents();

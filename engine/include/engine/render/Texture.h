@@ -10,6 +10,8 @@ public:
     static Texture fromFile(std::string_view path,
                             TextureFilter filter = TextureFilter::Nearest);
     static Texture fromWhite();
+    // Adopt an existing GL texture ID (Font atlas, etc.). Destructor will delete it.
+    static Texture fromRawOwned(unsigned int glId, int w, int h);
 
     ~Texture();
     Texture(Texture&&) noexcept;

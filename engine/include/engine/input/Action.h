@@ -10,6 +10,8 @@ enum class Action : std::size_t {
     Attack,
     Dash,
     ToggleDebug,
+    SaveGame,
+    LoadGame,
     Quit,
     kCount
 };

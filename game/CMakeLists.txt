@@ -10,6 +10,10 @@ add_executable(game
     src/systems/EnemyAISystem.cpp
     src/systems/EnemyCombatSystem.cpp
     src/systems/ProjectileSystem.cpp
+    # M6
+    src/ui/Hud.cpp
+    src/systems/BossLogic.cpp
+    src/data/BossAttackTable.cpp
 )
 
 target_include_directories(game PRIVATE src)

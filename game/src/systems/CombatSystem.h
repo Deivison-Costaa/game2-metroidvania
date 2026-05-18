@@ -40,14 +40,16 @@ private:
 void combatPreUpdate(eng::ecs::Registry& reg, float dt);
 
 // Call after physics.step() to apply damage, knockback, flash, and invoke callbacks.
-// onHitStop: receives duration in seconds — set your scene's m_timeScale accordingly.
-// onTrauma:  receives trauma amount [0..1] for the camera shake system.
-// onHitSpark: receives world-space hit position for particle spawn (optional).
+// onHitStop:      receives duration in seconds — set your scene's m_timeScale accordingly.
+// onTrauma:       receives trauma amount [0..1] for the camera shake system.
+// onHitSpark:     receives world-space hit position for particle spawn (optional).
+// onDamageDealt:  receives world-space hit position + damage dealt (for HUD popups/SFX).
 void combatPostUpdate(
     eng::ecs::Registry& reg,
     CombatContactListener& listener,
     const std::function<void(float)>& onHitStop,
     const std::function<void(float)>& onTrauma,
-    const std::function<void(glm::vec3)>& onHitSpark = {});
+    const std::function<void(glm::vec3)>& onHitSpark = {},
+    const std::function<void(glm::vec3, float)>& onDamageDealt = {});
 
 } // namespace sys

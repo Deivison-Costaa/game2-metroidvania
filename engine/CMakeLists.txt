@@ -19,6 +19,15 @@ add_library(engine STATIC
     src/animation/AnimationClip.cpp
     src/map/TileMap.cpp
     src/map/TileMapRenderer.cpp
+    # M6 — audio
+    src/audio/AudioBuffer.cpp
+    src/audio/AudioSource.cpp
+    src/audio/AudioEngine.cpp
+    # M6 — UI
+    src/ui/Font.cpp
+    src/ui/TextRenderer.cpp
+    # M6 — save
+    src/save/SaveSystem.cpp
 )
 
 target_include_directories(engine
@@ -34,8 +43,9 @@ target_link_libraries(engine
         glm::glm
         box2d
         nlohmann_json::nlohmann_json
-    PRIVATE
+        OpenAL::OpenAL
         Freetype::Freetype
+    PRIVATE
         stb
         assimp::assimp
         pugixml::pugixml

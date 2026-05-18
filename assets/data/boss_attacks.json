@@ -1,0 +1,109 @@
+{
+    "phases": [
+        {
+            "name": "stance",
+            "hpEnter": 1.0,
+            "speedMul": 1.0,
+            "windows": [
+                {
+                    "clip": "boss_stance_slash",
+                    "windup": 0.35,
+                    "active": 0.18,
+                    "recovery": 0.45,
+                    "hitbox": {
+                        "offset": [
+                            0.7,
+                            0
+                        ],
+                        "size": [
+                            0.8,
+                            0.4
+                        ],
+                        "damage": 2,
+                        "knockback": [
+                            4,
+                            1.5
+                        ]
+                    }
+                }
+            ]
+        },
+        {
+            "name": "enrage",
+            "hpEnter": 0.66,
+            "speedMul": 1.5,
+            "windows": [
+                {
+                    "clip": "boss_enrage_slash",
+                    "windup": 0.18,
+                    "active": 0.15,
+                    "recovery": 0.3,
+                    "hitbox": {
+                        "offset": [
+                            0.7,
+                            0
+                        ],
+                        "size": [
+                            0.8,
+                            0.4
+                        ],
+                        "damage": 2,
+                        "knockback": [
+                            5,
+                            2
+                        ]
+                    }
+                },
+                {
+                    "clip": "boss_enrage_slash",
+                    "windup": 0.2,
+                    "active": 0.3,
+                    "recovery": 0.25,
+                    "dashVel": [
+                        10,
+                        0
+                    ]
+                }
+            ]
+        },
+        {
+            "name": "desperate",
+            "hpEnter": 0.33,
+            "speedMul": 1.5,
+            "windows": [
+                {
+                    "clip": "boss_desperate_radial",
+                    "windup": 0.25,
+                    "active": 0.05,
+                    "recovery": 0.5,
+                    "radial": {
+                        "count": 8,
+                        "speed": 7,
+                        "damage": 1
+                    }
+                },
+                {
+                    "clip": "boss_enrage_slash",
+                    "windup": 0.18,
+                    "active": 0.15,
+                    "recovery": 0.3,
+                    "hitbox": {
+                        "offset": [
+                            0.7,
+                            0
+                        ],
+                        "size": [
+                            0.8,
+                            0.4
+                        ],
+                        "damage": 3,
+                        "knockback": [
+                            5,
+                            2
+                        ]
+                    }
+                }
+            ]
+        }
+    ]
+}

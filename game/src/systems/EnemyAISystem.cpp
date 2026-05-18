@@ -49,6 +49,8 @@ static const char* enemyClipName(EnemyKind kind, EnemyState state) {
         case EnemyState::Dead:    return "ranged_dead";
         }
         break;
+    case EnemyKind::MiniBoss:
+        break; // Handled by BossLogic::bossClipName
     }
     return "";
 }
@@ -351,6 +353,9 @@ void enemyAIUpdate(eng::ecs::Registry& reg,
             break;
         case EnemyKind::Ranged:
             updateRanged(e, ai, reg, physics, playerPos, dt, clips, spawnProjectile);
+            break;
+        case EnemyKind::MiniBoss:
+            // Boss is handled separately by the scene via sys::updateMiniBoss().
             break;
         }
     }

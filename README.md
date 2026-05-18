@@ -42,6 +42,8 @@ cmake --build build -j$(nproc)
 | Espaço | Pular (coyote time + jump buffer) |
 | J | Atacar (hitbox data-driven) |
 | F1 | Toggle debug-draw Box2D (hitboxes visíveis) |
+| F5 | Salvar jogo (posição + HP + inimigos derrotados) |
+| F9 | Carregar último save |
 | ESC | Sair |
 
 **Mecânicas de movimento:**
@@ -58,8 +60,8 @@ cmake --build build -j$(nproc)
 | M2 | ECS + Physics (Box2D) + Input | ✅ |
 | M3 | Animation StateMachine + Combate data-driven + Câmera cinematográfica | ✅ |
 | M4 | Inimigos com IA FSM + Tiled (.tmx) + Paralaxe + raycastAny | ✅ |
-| M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | 🔜 |
-| M6 | Áudio + UI + Save/Load + Mini-boss | 🔜 |
+| M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | ✅ |
+| M6 | Áudio + UI + Save/Load + Mini-boss | ✅ |
 | M7 | Polish + Assets finais + Color grade | 🔜 |
 
 ## Estrutura

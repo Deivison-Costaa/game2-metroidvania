@@ -1,7 +1,7 @@
 #pragma once
 #include <glm/glm.hpp>
 
-enum class EnemyKind  { Walker, Flyer, Ranged };
+enum class EnemyKind  { Walker, Flyer, Ranged, MiniBoss };
 enum class EnemyState { Patrol, Chase, Attack, Hurt, Dead };
 
 struct EnemyAI {

@@ -70,6 +70,10 @@ Texture Texture::fromFile(std::string_view path, TextureFilter filter) {
     return Texture(id, w, h, ch);
 }
 
+Texture Texture::fromRawOwned(unsigned int glId, int w, int h) {
+    return Texture(glId, w, h, 4);
+}
+
 Texture Texture::fromWhite() {
     const unsigned char px[4] = {255, 255, 255, 255};
     GLuint id{};

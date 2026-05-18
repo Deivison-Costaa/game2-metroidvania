@@ -11,8 +11,11 @@
 #include "engine/render/SpriteBatch.h"
 #include "engine/resources/ResourceManager.h"
 #include "engine/render/Texture.h"
+#include "engine/save/SaveSystem.h"
 #include "systems/CameraSystem.h"
 #include "systems/CombatSystem.h"
+#include "data/BossAttackTable.h"
+#include "ui/Hud.h"
 #include <SDL2/SDL.h>
 #include <memory>
 #include <vector>
@@ -57,7 +60,8 @@ private:
     // Heap-allocated fixture user-data — owned here so they outlive the bodies
     std::vector<std::unique_ptr<sys::FixtureUserData>> m_fixtureData;
 
-    eng::ecs::Entity m_player{eng::ecs::kNullEntity};
+    eng::ecs::Entity m_player  {eng::ecs::kNullEntity};
+    eng::ecs::Entity m_miniBoss{eng::ecs::kNullEntity};
 
     // M4 — TileMap + Parallax + Enemies
     std::unique_ptr<eng::map::TileMap>      m_tileMap;
@@ -71,7 +75,12 @@ private:
 
     // Spawn helpers (called from buildLevel after TMX is loaded)
     void spawnEnemyFromObject(const eng::map::MapObject& obj);
+    void spawnMiniBossFromObject(const eng::map::MapObject& obj);
     eng::ecs::Entity spawnProjectile(glm::vec2 from, glm::vec2 vel, float damage);
+
+    // Save helpers
+    void doSave();
+    void doLoad();
 
     // M5 — Post-process stack + particles
     std::unique_ptr<eng::render::PostProcessStack> m_postFx;
@@ -80,6 +89,12 @@ private:
 
     // Sun world position for god rays (fixed artistic choice: upper-right background)
     static constexpr glm::vec3 kSunWorldPos{25.f, 10.f, -5.f};
+
+    // M6 — HUD + Save + Boss AI table
+    std::unique_ptr<Hud>          m_hud;
+    data::BossAttackTable         m_bossTable;
+    eng::save::SaveData           m_saveData;
+    float                         m_playtime{0.f};
 
     float m_timeScale   {1.f};  // 0 during hit-stop, 1 normally
     float m_hitStopTimer{0.f};

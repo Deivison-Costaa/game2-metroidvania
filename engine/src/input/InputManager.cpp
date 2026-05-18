@@ -10,6 +10,8 @@ InputManager::InputManager() {
     m_bindings[static_cast<std::size_t>(Action::Attack)]      = SDL_SCANCODE_J;
     m_bindings[static_cast<std::size_t>(Action::Dash)]        = SDL_SCANCODE_K;
     m_bindings[static_cast<std::size_t>(Action::ToggleDebug)] = SDL_SCANCODE_F1;
+    m_bindings[static_cast<std::size_t>(Action::SaveGame)]    = SDL_SCANCODE_F5;
+    m_bindings[static_cast<std::size_t>(Action::LoadGame)]    = SDL_SCANCODE_F9;
     m_bindings[static_cast<std::size_t>(Action::Quit)]        = SDL_SCANCODE_ESCAPE;
 }
 
