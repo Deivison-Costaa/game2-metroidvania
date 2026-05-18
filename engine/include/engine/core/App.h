@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/core/Window.h"
+#include "engine/input/InputManager.h"
 #include <SDL2/SDL.h>
 #include <memory>
 #include <string_view>
@@ -19,8 +20,9 @@ public:
     void run();
     void quit() { m_running = false; }
 
-    Window& window()    { return *m_window; }
-    float   time() const { return m_time; }
+    Window&                   window() { return *m_window; }
+    eng::input::InputManager& input()  { return m_input; }
+    float                     time() const { return m_time; }
 
 protected:
     virtual void onInit()                      {}
@@ -30,7 +32,8 @@ protected:
     virtual void onShutdown()                  {}
 
 private:
-    std::unique_ptr<Window> m_window;
+    std::unique_ptr<Window>      m_window;
+    eng::input::InputManager     m_input;
     bool  m_running{false};
     float m_time   {0.f};
 };

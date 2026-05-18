@@ -1,4 +1,12 @@
-add_executable(game src/main.cpp)
+add_executable(game
+    src/main.cpp
+    src/scenes/GameScene.cpp
+    src/systems/PlayerControllerSystem.cpp
+    src/systems/PhysicsSyncSystem.cpp
+    src/systems/SpriteRenderSystem.cpp
+)
+
+target_include_directories(game PRIVATE src)
 
 target_link_libraries(game PRIVATE engine project_warnings)
 

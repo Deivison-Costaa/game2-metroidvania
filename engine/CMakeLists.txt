@@ -7,6 +7,10 @@ add_library(engine STATIC
     src/render/SpriteBatch.cpp
     src/render/Mesh.cpp
     src/render/MeshRenderer.cpp
+    src/ecs/Registry.cpp
+    src/input/InputManager.cpp
+    src/physics/PhysicsWorld.cpp
+    src/physics/DebugDraw.cpp
 )
 
 target_include_directories(engine
@@ -20,6 +24,7 @@ target_link_libraries(engine
         OpenGL::GL
         GLEW::GLEW
         glm::glm
+        box2d
     PRIVATE
         Freetype::Freetype
         stb

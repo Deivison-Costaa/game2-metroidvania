@@ -9,7 +9,7 @@ sudo dnf install -y \
   sdl2-compat-devel SDL2_image-devel \
   openal-soft-devel \
   assimp-devel \
-  Box2D-devel \
+  box2d-devel \
   freetype-devel \
   pugixml-devel \
   glm-devel \
@@ -37,7 +37,11 @@ cmake --build build -j$(nproc)
 
 | Tecla | Ação |
 |-------|------|
-| ESC   | Sair |
+| A / ← | Mover esquerda |
+| D / → | Mover direita |
+| Espaço | Pular |
+| F1 | Toggle debug-draw Box2D |
+| ESC | Sair |
 
 ## Milestones
 
@@ -45,7 +49,7 @@ cmake --build build -j$(nproc)
 |---|------|--------|
 | M0 | Bootstrap — janela + shader animado | ✅ |
 | M1 | Renderer 2D + 3D (SpriteBatch, MeshRenderer, Camera) | ✅ |
-| M2 | ECS + Physics (Box2D) + Input | 🔜 |
+| M2 | ECS + Physics (Box2D) + Input | ✅ |
 | M3 | Animation + Combate + Câmera cinematográfica | 🔜 |
 | M4 | Inimigos com IA FSM + Tiled (.tmx) | 🔜 |
 | M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | 🔜 |

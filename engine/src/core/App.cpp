@@ -29,6 +29,7 @@ void App::run() {
         m_time += dt;
 
         // ── Event pump ────────────────────────────────────────────────────
+        m_input.beginFrame();
         SDL_Event ev;
         while (SDL_PollEvent(&ev)) {
             if (ev.type == SDL_QUIT) m_running = false;
@@ -39,6 +40,7 @@ void App::run() {
                 m_window->setSize(w, h);
                 glViewport(0, 0, w, h);
             }
+            m_input.handleEvent(ev);
             onEvent(ev);
         }
 
