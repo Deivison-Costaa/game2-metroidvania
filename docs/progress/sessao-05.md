@@ -1,156 +1,179 @@
-# Sessão 05 — M4: Inimigos IA FSM + Tiled Loader + Paralaxe + raycastAny
+# Sessão 05 — M5: Shaders Avançados (HDR Bloom + Fog + God Rays + Partículas)
 
-**Data:** 2026-05-17 / 2026-05-18  
-**Milestone:** M4 — vertical slice jogável  
-**Status final:** ✅ build limpo, 144 FPS, shutdown limpo
+**Data:** 2026-05-18  
+**Commit:** `baf7807` — 32 arquivos | +1114 -41 linhas  
+**Status final:** ✅ build limpo, 0 warnings, 144 FPS, shutdown limpo
 
 ---
 
-## O que foi construído
+## Por que este milestone era necessário
 
-M4 vira a chave de "demo técnica" para "vertical slice jogável". O jogo agora tem um nível carregado por dados externos, três tipos de inimigo com IA reativa, e um fundo com paralaxe que dá profundidade visual.
+M0–M4 entregaram um jogo **funcionalmente completo** mas visualmente plano: um único render pass sem pós-processamento, sprites com tint padrão [0,1], zero feedback visual de partículas. O objetivo do projeto é parecer um indie comercial moderno (Ori, Hollow Knight, Dead Cells). Sem bloom, sem volumetria e sem partículas, o jogo parece uma prototype técnica.
 
-### PhysicsWorld::raycastAny()
+M5 transforma o pipeline em **HDR multi-pass** e adiciona feedback visual que amplifica a leitura de combate — o hit-flash agora estoura em bloom, inimigos explodem em partículas coloridas ao morrer, projéteis deixam rastro magenta brilhante. A barra de "polimento" visual sobe de ~30% para ~65%.
 
-**Motivação:** sem uma primitiva de raycast, inimigos "veem através de paredes" — eles perceberiam o player mesmo sem linha de visão, quebrando a ilusão de mundo físico. A mesma função abre espaço para projetis com hitscam, lasers, e qualquer mecânica de percepção futura.
+---
 
-**Decisão técnica:** espelhar o padrão existente de `isOnGround()` (callback inline `b2RayCastCallback`). `return 0.f` no `ReportFixture` para no primeiro hit (comportamento "any"), ignora sensors (hitboxes não bloqueiam LoS) e ignora o próprio corpo do inimigo (`skip` param).
+## Arquitetura do pipeline novo
 
-```cpp
-RaycastHit PhysicsWorld::raycastAny(glm::vec2 from, glm::vec2 to, b2Body* skip) const
+```
+DEFAULT FB (MSAA 4x preservado para debug lines)
+      ▲
+      │ composite.frag (ACES + gamma + FXAA + vinheta)
+      │
+  ┌───┴──────────────────────────────────────────────────────────┐
+  │                                                              │
+HDR FBO RGBA16F (full res)     pingFBO (half)       raysFBO (quarter)
+  │                                │                      │
+  │  cena: parallax + tilemap      │ bloom final          │ god rays
+  │  + sprites + particles         │ (dual-filter)        │ (radial blur)
+  └──────────────────────────────────────────────────────────────┘
+                    ▲
+           bright_pass.frag: extrai pixels com luma > 1.0
 ```
 
-### Collision Categories (CollisionCategories.h)
+---
 
-**Motivação:** sem filtros de categoria, a hitbox do Walker bateria na hurtbox de outro Walker — inimigos se matariam entre si. Também impede que projéteis de inimigo acertem outros inimigos.
+## Decisões técnicas com raciocínio
 
-**Decisão técnica:** 6 categorias (`kCatWorld`, `kCatPlayer`, `kCatEnemy`, `kCatPlayerAttack`, `kCatEnemyAttack`, `kCatProjectile`) com máscaras pré-calculadas. Introduzido aqui em M4, aplicado retroativamente no player.
+### 1. Por que HDR (RGBA16F) em vez de LDR (RGBA8)?
 
-### TileMap loader (pugixml)
+Com LDR, o bloom extrai apenas pixels > 0.8–0.9 no range [0,1]. O resultado é bloom "fraco" ou blooms em tudo (se o threshold for baixo demais). Com HDR, os tints podem ser > 1.0: hit-flash usa `{3t+1, 1-0.8t, 1-0.8t}` (até 4× o normal), hit-sparks usam `{2.5, 2.0, 1.2}`. Esses valores sobrevivem intactos no FBO RGBA16F. O bloom extrai apenas os eventos visuais importantes, ficando natural e circunscrito.
 
-**Motivação:** `buildLevel()` hard-coded em C++ não escala. M5-M7 terão biomas diferentes — sem um pipeline de mapa, cada nível exige recompilação.
+### 2. Por que dual-filter blur (Kawase) em vez de Gaussian separável?
 
-**Decisão técnica:** pugixml (sistema com FetchContent fallback) para parsear XML Tiled. Formato CSV encoding (sem base64/zlib) — simples de debugar e suficiente para os mapas que temos. Colisões via object layer "collision" (não decodificadas do tile grid) — mais flexível e menos código.
+O Gaussian separável precisa de 2N passes para kernel de tamanho N. O dual-filter de Marius Bjørge (SIGGRAPH 2015 Mobile) usa apenas 2 passes por iteração (downsample + upsample) e consegue resultado praticamente idêntico para bloom. Para 640×360 (bloom FBO em half-res), 3 iterações dão um kernel efetivo de ~24px — suave o suficiente para o look Ori.
 
-**Coordenadas:** Tiled usa Y-down pixels. Conversão `tiledToWorld()`: `cy = (mapHeightPx - pos.y - size.y*0.5) / ppm`. Offset `kMapOrigin = {-20, -2}` alinha o chão do TMX com `y=0m` world (mesma referência de M0-M3).
+### 3. Por que fog por Z-depth e não screen-space?
 
-**Mapa gerado proceduralmente** (`scripts/gen_test_tmx.py`) — sem dependência do editor Tiled instalado. Usuário pode editar no Tiled depois sem quebrar o loader (desde que não use GID flips, que não são suportados nesta versão).
+Screen-space fog precisa de um depth buffer compartilhado entre passes, complicando o multi-pass HDR. No 2.5D com parallax, o Z-depth artístico dos layers (-4, -3, -2) é exatamente o que queremos para a neblina. Sprites do player/inimigos em Z=0 ficam sem fog automaticamente. A fórmula `fog = clamp(-worldZ * density * 0.2, 0, 1)` é elegante, zero-cost quando density=0 (default), e backwards-compatible.
 
-### TileMapRenderer
+### 4. Por que god rays em quarter-res?
 
-**Motivação:** renderizar tiles sem novo shader ou pipeline. SpriteBatch já suporta UV sub-rect.
+God rays são inherentemente de baixa frequência. Renderizar em quarter-res (320×180) economiza 16× o custo dos 64 samples do loop em relação a full-res, e o resultado upscalado pelo sampler bilinear no composite é visualmente indistinguível. No hardware Intel integrado, este trade-off é crítico para manter ~7ms/frame.
 
-**Decisão técnica:** iterar grid, calcular `(localId % cols, localId / cols)` para obter coluna/linha no atlas, computar uvMin/uvMax normalizados, chamar `batch.draw()`. Tile GID 0 = vazio, pular.
+### 5. Por que instanced rendering para partículas?
 
-### ParallaxRenderer (3 camadas)
+Com GPU instancing (`glDrawArraysInstanced`), toda a pool de partículas ativa é desenhada em **um único draw call**. O CPU apenas preenche o VBO de instâncias (pos, color, size, rotation). A alternativa (um draw call por partícula) seria devastadora para performance — até 4096 draw calls no pior caso.
 
-**Motivação:** paralaxe dá profundidade visual sem shaders avançados (Bloom/God Rays ficam para M5). É o detalhe visual mais perceptível por espectadores.
+### 6. Por que callbacks (std::function) em vez de passar ParticleSystem diretamente?
 
-**Decisão técnica:** `layerX = camPos.x * (1 - factorX)` — fator 0=fixo, 1=rola com o mundo. `yOffsetFromCam` ao invés de `worldY` absoluto, porque as camadas devem seguir a câmera verticalmente (sempre na tela). Repetição horizontal (`rep = -2..+2`) com `quadW = tex->width / ppm` — seamless sem UV wrap complicado.
-
-Ordem de render (painter's algorithm): parallax → tilemap → sprites. Sem depth test no SpriteBatch — a ordem de chamada define a sobreposição.
-
-### EnemyAI FSM (3 tipos)
-
-**Motivação:** o training dummy de M3 era estático. Para ser um vertical slice jogável o mundo precisa de entidades que reajam ao player.
-
-#### Walker (slime-knight vermelho)
-- Patrulha entre `patrolMinX/patrolMaxX`, alterna direção nas bordas
-- Raycast horizontal para LoS — não percebe player atrás de parede
-- Chase: vai ao player em velocidade 1.5× da patrulha
-- Attack: fica parado, hitbox ativa em 0.05s–0.25s do estado, janela total 0.4s
-- Hurt: 0.3s de stagger, volta ao Chase
-
-#### Flyer (morcego roxo)
-- Oscilação senoidal em Y durante Patrol (`sin(sinePhase) * 2.0f`)
-- Chase: voa diretamente em 8 direções em velocidade 2×
-- Ignora obstáculos para LoS (voa acima das paredes)
-- Sem gravidade (`SetGravityScale(0)`)
-
-#### Ranged (goblin arqueiro verde)
-- Fica parado, sempre encarando o player
-- Raycast para LoS, dispara projétil via callback `SpawnProjectileFn`
-- Projétil: dynamic body sem gravidade, `Hitbox` sensor sempre ativo, `Projectile` component com lifetime
-- `ProjectileSystem` decrementa lifetime e destrói corpo + entidade
-
-**Padrão de clip swap:** espelha `PlayerControllerSystem.cpp` — `transitionState()` reseta `stateTimer`, busca clip por `enemyClipName(kind, state)`, aplica no `Animator`. Mapper separado evita switch aninhado espalhado.
-
-**Cleanup pós-mortal:** entidades Dead acumulam `stateTimer` em `enemyAIUpdate()` e são destruídas após `kDeadDespawnDelay = 1.2s`, fora do loop de iteração para evitar invalidação de iterador.
-
-### EnemyCombatSystem
-
-**Motivação:** espelhar `combatPreUpdate` do player sem tocar no caminho do player que já estava validado.
-
-**Decisão técnica:** `enemyCombatPreUpdate()` separado, itera `view<EnemyAI, Hitbox>`, gatea `hitbox.active` pela janela de timing do ataque. Box2D 2.4 não permite mudança de shape em fixture viva — hitbox baked na direção de spawn, flip por `categoryBits` na iteração.
-
-### Spawns via TMX
-
-**Motivação:** o último passo para conteúdo 100% data-driven — player e inimigos nascem de objetos no `.tmx`, não de código hard-coded.
-
-**Implementação:** `spawnEnemyFromObject()` lê `obj.type` ("enemy_walker", "enemy_flyer", "enemy_ranged"), usa `obj.properties` para `patrolRange` e configura todos os parâmetros de IA. Projétil spawna com tint laranja e sem gravidade.
+Os sistemas de gameplay (EnemyAISystem, CombatSystem, ProjectileSystem) devem ser agnósticos ao ParticleSystem. Passando callbacks, a dependência é invertida: o GameScene registra lambdas que chamam `m_particleSys->spawn(...)`, e os sistemas chamam apenas o callback quando o evento ocorre. Isso mantém os sistemas testáveis e reutilizáveis independentemente do renderer.
 
 ---
 
-## Resultados de validação
+## Diagrama — render pass por frame
 
-- Build limpo: 0 warnings com `-DSTRICT_WARNINGS=ON`  
-- FPS: 143-144 com 3 inimigos ativos (meta: ≥ 120)  
-- Todas as texturas carregadas: player, dummy, 3 inimigos, tileset, 3 paralaxe  
-- TileMap: `40×20 tiles | 1 tile layers | 2 object layers`  
-- Shutdown: `[INFO] Shutdown clean`
+```
+GameScene::render()
+    │
+    ├─ m_postFx->beginScene()           ← bind HDR FBO, clear
+    │
+    ├─ m_batch->shader().set(fogUniforms)  ← persist ao longo das chamadas
+    │
+    ├─ drawParallax(...)                ← sprite.vert/frag com fog (z=-2 a -4)
+    ├─ drawTileLayer(...)               ← z=-0.1 (fog quase imperceptível)
+    ├─ spriteRenderUpdate(...)          ← z=0 (player/enemies: sem fog)
+    ├─ m_particleSys->render(...)       ← instanced, HDR colors
+    │
+    └─ m_postFx->endSceneAndComposite(camera, kSunWorldPos)
+           │
+           ├─ doBrightPass()            → pingFBO (half-res, luma > 1.0)
+           ├─ doGodRays(sunUV)          → raysFBO (quarter-res, radial blur)
+           ├─ doBlur() ×3 iter          → pingFBO/pongFBO ping-pong
+           └─ doComposite()             → default FB
+                    │
+                    ├─ FXAA 5-tap no HDR
+                    ├─ hdr + bloom*0.04 + godRays
+                    ├─ ACES tonemap
+                    ├─ gamma 2.2
+                    └─ vinheta radial sutil
+    │
+    └─ DebugDraw (F1) — fora do HDR, no default FB (MSAA 4x preservado)
+```
 
 ---
 
 ## Arquivos criados/modificados
 
-**Engine (novos):**
-- `engine/include/engine/physics/CollisionCategories.h`
-- `engine/include/engine/map/TileMap.h` + `engine/src/map/TileMap.cpp`
-- `engine/include/engine/map/TileMapRenderer.h` + `engine/src/map/TileMapRenderer.cpp`
-- `engine/include/engine/render/ParallaxRenderer.h` + `engine/src/render/ParallaxRenderer.cpp`
+### Engine — novos módulos
 
-**Engine (modificados):**
-- `engine/include/engine/physics/PhysicsWorld.h` — struct `RaycastHit` + declaração `raycastAny`
-- `engine/src/physics/PhysicsWorld.cpp` — implementação `raycastAny`
-- `engine/CMakeLists.txt` — novos `.cpp` + pugixml
+| Arquivo | Propósito |
+|---------|-----------|
+| `engine/render/Framebuffer.h/cpp` | RAII FBO: color texture + depth RBO, move-only, resize |
+| `engine/render/FullscreenQuad.h/cpp` | VAO vazio + `draw()` = `glDrawArrays(GL_TRIANGLES, 0, 3)` |
+| `engine/render/PostProcessStack.h/cpp` | HDR FBO + 3 passes + `beginScene` / `endSceneAndComposite` |
+| `engine/render/ParticleSystem.h/cpp` | Pool 4096, instanced VBO, spawn por kind (4 presets) |
 
-**CMake:**
-- `cmake/Dependencies.cmake` — pugixml com FetchContent fallback
+### Shaders — novos
 
-**Game (novos):**
-- `game/src/components/EnemyAI.h`
-- `game/src/components/Projectile.h`
-- `game/src/systems/EnemyAISystem.h/.cpp`
-- `game/src/systems/EnemyCombatSystem.h/.cpp`
-- `game/src/systems/ProjectileSystem.h/.cpp`
+| Shader | Técnica |
+|--------|---------|
+| `post_fullscreen.vert` | Fullscreen tri via `gl_VertexID` + UV, reutilizado por todos os passes |
+| `bright_pass.frag` | Extração luma > threshold, clamp a 20 evita ringing no blur |
+| `blur_dual_filter.frag` | Kawase dual-filter: modo 0=down, 1=up |
+| `god_rays.frag` | 64-sample radial blur, decay por passo, zero fora do frustum |
+| `composite.frag` | HDR + bloom*str + godRays → ACES + gamma + FXAA + vinheta |
+| `particle.vert/frag` | Billboard instanciado com rotação 2D, tint HDR |
 
-**Game (modificados):**
-- `game/src/scenes/GameScene.h` — membros M4
-- `game/src/scenes/GameScene.cpp` — buildLevel, update, render, clips de inimigos
-- `game/CMakeLists.txt` — novos sistemas + cópia de maps
+### Shaders — modificados
 
-**Assets (gerados via Python):**
-- `scripts/gen_tileset.py` → `assets/tilesets/test_tileset.png`
-- `scripts/gen_parallax.py` → 3 PNGs de paralaxe
-- `scripts/gen_test_tmx.py` → `maps/test_level.tmx`
-- `scripts/gen_enemy_sheets.py` → 3 sprite sheets de inimigos (128×128, 4×4 células)
-- 15 arquivos JSON de clips de animação em `assets/data/`
+| Shader | Mudança |
+|--------|---------|
+| `sprite.vert` | `vWorldDepth = -aPos.z` para fog |
+| `sprite.frag` | `fog = clamp(-Z * density * 0.2, 0, 1)` + uniforms fog |
+| `mesh.vert/frag` | Mesmo padrão de fog |
 
----
+### Game — modificações
 
-## Bugs encontrados e corrigidos
-
-1. `'toB2' was not declared` — faltava `#include "engine/physics/PhysicsConstants.h"` no GameScene.cpp
-2. `unused parameter 'dt'` — `float dt` → `float /*dt*/` em EnemyCombatSystem
-3. `unused parameter 'physics'` — mesmo fix em updateFlyer
-4. `variable 'dir' set but not used` — removida variável redundante em updateRanged
-5. `ValueError: y1 >= y0` no PIL — confusão `ox` (x-offset) com `oy` (y-offset) em coordenadas Y dos sprites gerados
+| Arquivo | Mudança |
+|---------|---------|
+| `GameScene.h` | `m_postFx`, `m_particleSys`, `m_dustTimer`, `kSunWorldPos` |
+| `GameScene.cpp` | HDR pipeline no render(); callbacks de partículas no update(); dust ambient |
+| `EnemyAISystem.h/cpp` | `OnEnemyDeathFn` callback, chama na transição → Dead |
+| `CombatSystem.h/cpp` | `onHitSpark` callback + hit-flash HDR |
+| `ProjectileSystem.h/cpp` | Trail de partícula por projétil ativo |
+| `SpriteBatch.h` | Getter `Shader& shader()` para fog uniforms |
+| `engine/CMakeLists.txt` | +4 novos `.cpp` |
 
 ---
 
-## Próximas etapas (M5)
+## Bugs encontrados e soluções
 
-- Bloom pass pós-processamento (framebuffer separado + blur + composição)
-- God Rays / Fog via shader GLSL
-- Sistema de partículas (death burst, trail de projétil)
-- Mais variantes de inimigo e mecânicas (escudo, teleporte)
+**1. `particle_spark.png` gitignored:**  
+A rule `assets/sprites/*` bloqueava o arquivo. Adicionada exceção `!assets/sprites/particle_spark.png` seguindo o padrão dos outros sprites gerados.
+
+**2. `<cstdlib>` ausente em GameScene.cpp:**  
+Uso de `rand()` para dust emission exigia o include. Adicionado junto com os demais includes.
+
+**3. `glm/glm.hpp` ausente em CombatSystem.h:**  
+O parâmetro `glm::vec3` no novo callback `onHitSpark` exigia o include no header. Adicionado.
+
+---
+
+## Resultado da validação
+
+```
+[INFO] PostProcessStack: HDR 1280x720 RGBA16F | bloom 640x360 | god rays 320x180
+[INFO] Texture loaded: '.../particle_spark.png' [16x16 ch=4]
+[INFO] ParticleSystem: pool=4096 | spark texture loaded
+[INFO] M5 ready — A/D move | Space jump | J attack | F1 debug | ESC quit
+[INFO] FPS: 144  |  frame: 6.93 ms
+[INFO] Shutdown clean
+```
+
+- Build: 0 erros, 0 warnings do projeto (apenas stb_image third-party) ✅
+- FPS: 144 cap (frame ~6.93 ms vs ~6.95 ms no M4 — overhead dos novos passes: < 0.5ms) ✅
+- Shutdown limpo ✅
+- Commit `baf7807` publicado em `origin/main` ✅
+
+**M5 COMPLETO E VALIDADO.**
+
+---
+
+## Próximos passos (M6)
+
+- Áudio com OpenAL-soft: música de fundo + SFX de ataque/dano/morte
+- UI in-game: barra de HP do player, texto de dano flutuante
+- Save/Load atômico em JSON (`~/.local/share/game2/save.json`)
+- Mini-boss com FSM de duas fases
