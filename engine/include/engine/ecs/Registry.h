@@ -23,6 +23,9 @@ public:
     void   destroy(Entity e);
     bool   valid(Entity e) const noexcept;
 
+    // Destroy all entities and clear all component pools.
+    void clear() { m_pools.clear(); m_generations.clear(); m_freeList.clear(); }
+
     // ── Component operations ──────────────────────────────────────────────────
 
     template<typename C, typename... Args>

@@ -11,6 +11,9 @@ uniform sampler2D uGodRays;
 uniform float     uBloomStrength; // 0.04 default
 uniform float     uExposure;      // 1.0 default
 uniform vec2      uTexelSize;     // 1.0 / resolution (for FXAA on HDR)
+uniform sampler3D uColorLUT;      // 3D LUT (Hald, N³)
+uniform float     uLutStrength;   // 0 = bypass, 1 = full grade
+uniform float     uLutSize;       // N (e.g. 64)
 
 out vec4 fragColor;
 
@@ -37,6 +40,13 @@ vec3 fxaa(sampler2D tex, vec2 uv, vec2 texel) {
     return (n + s + e + w + m) / 5.0;
 }
 
+// Sample 3D LUT with half-texel offset correction (avoids clamping edge pixels)
+vec3 applyLUT(vec3 c) {
+    float scale  = (uLutSize - 1.0) / uLutSize;
+    float offset = 0.5 / uLutSize;
+    return texture(uColorLUT, clamp(c, 0.0, 1.0) * scale + offset).rgb;
+}
+
 void main() {
     vec3 scene  = fxaa(uHDR, vUV, uTexelSize);
     vec3 bloom  = texture(uBloom,   vUV).rgb;
@@ -48,6 +58,10 @@ void main() {
     // Tonemap + gamma
     vec3 ldr = aces(hdr);
     ldr = pow(ldr, vec3(1.0 / 2.2));
+
+    // Color grade via 3D LUT (teal shadows, warm highlights)
+    if (uLutStrength > 0.0)
+        ldr = mix(ldr, applyLUT(ldr), uLutStrength);
 
     // Subtle radial vignette
     vec2  vc  = vUV - 0.5;

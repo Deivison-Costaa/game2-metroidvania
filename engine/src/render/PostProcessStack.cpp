@@ -162,6 +162,16 @@ void PostProcessStack::doComposite() {
         glm::vec2{1.f / static_cast<float>(m_width),
                   1.f / static_cast<float>(m_height)});
 
+    if (m_colorLUT && m_colorLUT->valid()) {
+        glActiveTexture(GL_TEXTURE3);
+        glBindTexture(GL_TEXTURE_3D, m_colorLUT->id());
+        m_compositeSh.set("uColorLUT",    3);
+        m_compositeSh.set("uLutStrength", m_lutStrength);
+        m_compositeSh.set("uLutSize",     static_cast<float>(m_colorLUT->size()));
+    } else {
+        m_compositeSh.set("uLutStrength", 0.f);
+    }
+
     m_quad.draw();
     glActiveTexture(GL_TEXTURE0);
 }

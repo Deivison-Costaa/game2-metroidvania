@@ -1,5 +1,6 @@
 #include "systems/PlayerControllerSystem.h"
 #include "components/PlayerControl.h"
+#include "components/Health.h"
 #include "components/RigidBody.h"
 #include "components/Animator.h"
 #include "engine/input/Action.h"
@@ -18,6 +19,7 @@ static const char* clipName(PlayerState s) {
         case PlayerState::Fall:   return "fall";
         case PlayerState::Attack: return "attack";
         case PlayerState::Hurt:   return "hurt";
+        case PlayerState::Dead:   return "hurt"; // reuse hurt clip until a dedicated dead clip exists
         default:                  return "idle";
     }
 }
@@ -32,6 +34,31 @@ void playerControllerUpdate(
 {
     for (auto [e, ctrl, rb] : reg.view<PlayerControl, RigidBody>()) {
         if (!rb.body) continue;
+
+        // --- Dead state: freeze horizontal movement, let gravity act, do nothing else ---
+        if (ctrl.state == PlayerState::Dead) {
+            b2Vec2 vel = rb.body->GetLinearVelocity();
+            vel.x = 0.f;
+            rb.body->SetLinearVelocity(vel);
+            continue;
+        }
+
+        // Check for newly dead (Health goes to dead this frame)
+        if (reg.has<Health>(e) && reg.get<Health>(e).dead && ctrl.state != PlayerState::Dead) {
+            ctrl.state     = PlayerState::Dead;
+            ctrl.stateTime = 0.f;
+            b2Vec2 vel = rb.body->GetLinearVelocity();
+            vel.x = 0.f;
+            rb.body->SetLinearVelocity(vel);
+            const char* key = clipName(PlayerState::Dead);
+            if (clips.has(key) && reg.has<Animator>(e)) {
+                auto& anim = reg.get<Animator>(e);
+                anim.clip  = clips.get(key);
+                anim.time  = 0.f;
+                anim.frameIdx = 0;
+            }
+            continue;
+        }
 
         // --- Timers ---
         ctrl.stateTime       += dt;

@@ -1,4 +1,5 @@
 #pragma once
+#include "engine/animation/AttackTable.h"
 #include "engine/ecs/Registry.h"
 #include "engine/physics/PhysicsWorld.h"
 #include <box2d/box2d.h>
@@ -37,7 +38,9 @@ private:
 };
 
 // Call before physics.step() to update hitbox active state.
-void combatPreUpdate(eng::ecs::Registry& reg, float dt);
+// attackTable provides timing/offset data from player_attacks.json (data-driven).
+void combatPreUpdate(eng::ecs::Registry& reg, float dt,
+                     const eng::animation::AttackTable& attackTable);
 
 // Call after physics.step() to apply damage, knockback, flash, and invoke callbacks.
 // onHitStop:      receives duration in seconds — set your scene's m_timeScale accordingly.

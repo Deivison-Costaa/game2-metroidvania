@@ -1,5 +1,6 @@
 #pragma once
 #include "engine/animation/AnimationClip.h"
+#include "engine/animation/AttackTable.h"
 #include "engine/ecs/Registry.h"
 #include "engine/map/TileMap.h"
 #include "engine/physics/DebugDraw.h"
@@ -27,11 +28,15 @@ public:
     GameScene() = default;
 
     void init(eng::core::App& app);
+    void reinit(eng::core::App& app); // full reset + re-init (used by Retry)
     void update(float dt, eng::core::App& app);
     void render();
     void handleEvent(const SDL_Event& ev);
 
     bool debugDrawOn() const noexcept { return m_debugDrawOn; }
+
+    // Returns true after the player has been dead for 1.5s (triggers GameOver transition).
+    bool playerDeadDelayElapsed() const noexcept { return m_playerDeadElapsed; }
 
     void requestHitStop(float duration) {
         if (duration > m_hitStopTimer) m_hitStopTimer = duration;
@@ -53,6 +58,7 @@ private:
 
     eng::resources::ResourceManager<eng::render::Texture>         m_textures;
     eng::resources::ResourceManager<eng::animation::AnimationClip> m_clips;
+    eng::animation::AttackTable m_attackTable;
 
     sys::CombatContactListener m_contactListener;
     sys::CameraState           m_camState;
@@ -96,7 +102,9 @@ private:
     eng::save::SaveData           m_saveData;
     float                         m_playtime{0.f};
 
-    float m_timeScale   {1.f};  // 0 during hit-stop, 1 normally
-    float m_hitStopTimer{0.f};
-    bool  m_debugDrawOn {false};
+    float m_timeScale      {1.f};  // 0 during hit-stop, 1 normally
+    float m_hitStopTimer   {0.f};
+    float m_deathTimer     {0.f};  // accumulates after player dies
+    bool  m_playerDeadElapsed{false}; // set true when m_deathTimer >= 1.5s
+    bool  m_debugDrawOn    {false};
 };

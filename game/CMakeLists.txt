@@ -14,6 +14,8 @@ add_executable(game
     src/ui/Hud.cpp
     src/systems/BossLogic.cpp
     src/data/BossAttackTable.cpp
+    # M7
+    src/scenes/MenuScene.cpp
 )
 
 target_include_directories(game PRIVATE src)

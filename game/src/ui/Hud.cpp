@@ -9,9 +9,13 @@
 #include <cstdio>
 #include <filesystem>
 
-// Default font search path on Fedora
-static constexpr const char* kFontPath =
-    "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf";
+// Font search paths (tried in order)
+static constexpr const char* kFontCandidates[] = {
+    ASSET_ROOT "/assets/fonts/Kenney_Future.ttf",
+    "/usr/share/fonts/liberation-sans-fonts/LiberationSans-Bold.ttf",
+    "/usr/share/fonts/dejavu-sans-fonts/DejaVuSans-Bold.ttf",
+    "/usr/share/fonts/google-carlito-fonts/Carlito-Bold.ttf",
+};
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -30,12 +34,15 @@ void Hud::init(int screenW, int screenH) {
     // White texture for solid-color bar drawing
     m_whiteTex = eng::render::Texture::fromWhite();
 
-    // Font — try Fedora default path
-    if (std::filesystem::exists(kFontPath)) {
-        m_font = eng::ui::Font::loadFromTTF(kFontPath, 20);
-    } else {
-        LOG_WARN("Hud: font not found at '{}' — text disabled", kFontPath);
+    // Font — try each candidate path in order
+    for (const char* fp : kFontCandidates) {
+        if (std::filesystem::exists(fp)) {
+            m_font = eng::ui::Font::loadFromTTF(fp, 20);
+            break;
+        }
     }
+    if (!m_font.valid())
+        LOG_WARN("Hud: no font found — HUD text disabled");
 }
 
 void Hud::resize(int w, int h) {

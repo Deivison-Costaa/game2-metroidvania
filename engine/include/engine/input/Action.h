@@ -13,6 +13,13 @@ enum class Action : std::size_t {
     SaveGame,
     LoadGame,
     Quit,
+    // ── Menu navigation ──────────────────────────────────────────────────────
+    MenuUp,
+    MenuDown,
+    MenuLeft,
+    MenuRight,
+    MenuConfirm,
+    MenuCancel,
     kCount
 };
 

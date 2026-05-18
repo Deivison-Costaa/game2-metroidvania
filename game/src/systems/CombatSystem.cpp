@@ -5,17 +5,13 @@
 #include "components/PlayerControl.h"
 #include "components/RigidBody.h"
 #include "components/SpriteRenderer.h"
+#include "components/EnemyAI.h"
 #include "components/Transform.h"
 #include "engine/physics/PhysicsConstants.h"
 #include <algorithm>
 #include <cstdint>
 
 namespace sys {
-
-// Offset (in meters) of the hitbox sensor from body center along the attacker's X axis.
-static constexpr float kHitboxOffsetX = 0.6f;
-static constexpr float kHitboxHalfW   = 0.4f;
-static constexpr float kHitboxHalfH   = 0.3f;
 
 // Seconds of invulnerability and flash after taking a hit
 static constexpr float kInvulnDuration = 0.45f;
@@ -53,7 +49,8 @@ void CombatContactListener::BeginContact(b2Contact* contact) {
 
 // ------------------------------------------------------------------ pre -----
 
-void combatPreUpdate(eng::ecs::Registry& reg, float dt) {
+void combatPreUpdate(eng::ecs::Registry& reg, float dt,
+                     const eng::animation::AttackTable& attackTable) {
     // Flash timer → tint SpriteRenderer white on hit
     for (auto [e, hp, sr] : reg.view<Health, SpriteRenderer>()) {
         hp.invulnTimer = std::max(0.f, hp.invulnTimer - dt);
@@ -68,30 +65,41 @@ void combatPreUpdate(eng::ecs::Registry& reg, float dt) {
         }
     }
 
-    // Manage hitbox activation based on attack timer and facing
+    // Manage hitbox activation based on attack timer and facing (data from player_attacks.json)
+    const eng::animation::AttackData* atk1 = attackTable.get("attack1");
+
     for (auto [e, ctrl, hb] : reg.view<PlayerControl, Hitbox>()) {
         if (!hb.fixture) continue;
 
-        const bool inAttack = (ctrl.state == PlayerState::Attack);
+        const bool  inAttack = (ctrl.state == PlayerState::Attack);
+        const float elapsed  = ctrl.attackDuration - ctrl.attackTimer;
 
-        // The active frames are the middle 60% of the attack duration
-        const float elapsed   = ctrl.attackDuration - ctrl.attackTimer;
-        const float activeFrac = elapsed / ctrl.attackDuration;
-        const bool  activeFrame = inAttack && activeFrac >= 0.2f && activeFrac <= 0.8f;
+        // Determine active window from AttackTable; fall back to [20%-80%] of duration
+        bool activeFrame = false;
+        float offsetX = 0.6f, hw = 0.4f, hh = 0.3f;
+        if (atk1 && !atk1->windows.empty()) {
+            const auto& w = atk1->windows[0];
+            activeFrame = inAttack && elapsed >= w.start && elapsed < w.end;
+            offsetX = w.offset.x;
+            hw      = w.halfSize.x;
+            hh      = w.halfSize.y;
+            if (activeFrame) {
+                hb.damage    = w.damage;
+                hb.knockback = w.knockback;
+            }
+        } else {
+            const float frac = elapsed / ctrl.attackDuration;
+            activeFrame = inAttack && frac >= 0.2f && frac <= 0.8f;
+        }
 
         if (activeFrame != hb.active) {
             hb.active = activeFrame;
-            if (!activeFrame) hb.hitMask = 0; // reset hit targets on deactivation
+            if (!activeFrame) hb.hitMask = 0;
         }
 
-        // Reposition sensor along facing direction (Box2D sensor stays body-local)
-        if (inAttack) {
-            b2PolygonShape* shape =
-                dynamic_cast<b2PolygonShape*>(hb.fixture->GetShape());
-            if (shape) {
-                b2Vec2 center{ctrl.facing * kHitboxOffsetX, 0.f};
-                shape->SetAsBox(kHitboxHalfW, kHitboxHalfH, center, 0.f);
-            }
+        // Reposition sensor along facing direction every frame so it is always current
+        if (auto* shape = dynamic_cast<b2PolygonShape*>(hb.fixture->GetShape())) {
+            shape->SetAsBox(hw, hh, b2Vec2{ctrl.facing * offsetX, 0.f}, 0.f);
         }
     }
 }
@@ -121,11 +129,18 @@ void combatPostUpdate(
 
             ev.damage = hb.damage;
 
-            // Facing-aware knockback
-            int facing = +1;
+            // Facing-aware knockback — resolve direction from attacker type
+            float dirX = +1.f;
             if (reg.has<PlayerControl>(ev.attacker))
-                facing = reg.get<PlayerControl>(ev.attacker).facing;
-            ev.knockbackX = facing * hb.knockback.x;
+                dirX = float(reg.get<PlayerControl>(ev.attacker).facing);
+            else if (reg.has<EnemyAI>(ev.attacker))
+                dirX = float(reg.get<EnemyAI>(ev.attacker).facing);
+            else if (reg.has<Transform>(ev.attacker) && reg.has<Transform>(ev.victim)) {
+                const auto& aT = reg.get<Transform>(ev.attacker);
+                const auto& vT = reg.get<Transform>(ev.victim);
+                dirX = (vT.position.x >= aT.position.x) ? +1.f : -1.f;
+            }
+            ev.knockbackX = dirX * std::abs(hb.knockback.x);
             ev.knockbackY = hb.knockback.y;
         }
 

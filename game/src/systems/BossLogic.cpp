@@ -252,6 +252,13 @@ void updateMiniBoss(
                     hb.damage    = w.hitbox->damage;
                     hb.knockback = w.hitbox->knockback;
                 }
+                // Reposition sensor along boss facing direction
+                if (hb.fixture) {
+                    if (auto* poly = dynamic_cast<b2PolygonShape*>(hb.fixture->GetShape())) {
+                        const float dir = static_cast<float>(ai.facing);
+                        poly->SetAsBox(0.5f, 0.4f, b2Vec2{dir * 1.0f, 0.f}, 0.f);
+                    }
+                }
             }
             // Dash impulse (apply once at start of active)
             if (w.dashVel && !bpd.dashing) {

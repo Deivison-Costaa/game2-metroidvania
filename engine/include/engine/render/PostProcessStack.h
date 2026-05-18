@@ -3,7 +3,9 @@
 #include "engine/render/Framebuffer.h"
 #include "engine/render/FullscreenQuad.h"
 #include "engine/render/Shader.h"
+#include "engine/render/Texture3D.h"
 #include <glm/glm.hpp>
+#include <memory>
 #include <string>
 
 namespace eng::render {
@@ -38,6 +40,9 @@ public:
     void setGodRayStrength(float v)         { m_rayStrength    = v; }
     void setGodRayColor(const glm::vec3& c) { m_rayColor       = c; }
 
+    void setLUT(std::shared_ptr<Texture3D> lut) { m_colorLUT = std::move(lut); }
+    void setLUTStrength(float s) { m_lutStrength = (s < 0.f ? 0.f : s > 1.f ? 1.f : s); }
+
     float            fogDensity()  const { return m_fogDensity; }
     const glm::vec3& fogColor()    const { return m_fogColor; }
     float            bloomStrength() const { return m_bloomStrength; }
@@ -66,6 +71,9 @@ private:
     Shader m_compositeSh;
 
     // Parameters with conservative visual defaults
+    std::shared_ptr<Texture3D> m_colorLUT;
+    float     m_lutStrength  {1.0f};
+
     float     m_bloomStrength{0.04f};
     float     m_bloomThreshold{1.0f};
     int       m_blurIter{3};

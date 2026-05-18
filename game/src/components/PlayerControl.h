@@ -1,6 +1,6 @@
 #pragma once
 
-enum class PlayerState { Idle, Run, Jump, Fall, Attack, Hurt };
+enum class PlayerState { Idle, Run, Jump, Fall, Attack, Hurt, Dead };
 
 struct PlayerControl {
     float moveSpeed    {6.f};   // m/s horizontal

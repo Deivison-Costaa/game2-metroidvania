@@ -30,6 +30,7 @@
 #include "engine/physics/CollisionCategories.h"
 #include "engine/physics/PhysicsConstants.h"
 #include "engine/render/ParallaxRenderer.h"
+#include "engine/render/Texture3D.h"
 #include <GL/glew.h>
 #include <glm/gtc/matrix_transform.hpp>
 #include <algorithm>
@@ -128,8 +129,19 @@ void GameScene::init(eng::core::App& app) {
     m_clips.load("boss_desperate_radial",  ASSET_ROOT "/assets/data/boss_desperate_radial.json");
     m_clips.load("boss_hurt",              ASSET_ROOT "/assets/data/boss_hurt.json");
     m_clips.load("boss_dead",              ASSET_ROOT "/assets/data/boss_dead.json");
-    m_bossTable = data::BossAttackTable::fromFile(
+    m_bossTable   = data::BossAttackTable::fromFile(
         ASSET_ROOT "/assets/data/boss_attacks.json");
+    m_attackTable = eng::animation::AttackTable::fromFile(
+        ASSET_ROOT "/assets/data/player_attacks.json");
+
+    // M7 — Color grade LUT
+    {
+        auto lut = std::make_shared<eng::render::Texture3D>(
+            eng::render::Texture3D::fromHaldPNG(
+                ASSET_ROOT "/assets/textures/lut_cinematic.png", 64));
+        m_postFx->setLUT(std::move(lut));
+        m_postFx->setLUTStrength(0.85f);
+    }
 
     // HUD
     m_hud = std::make_unique<Hud>();
@@ -177,7 +189,67 @@ void GameScene::init(eng::core::App& app) {
     // Start ambient music loop
     eng::audio::AudioEngine::instance().playMusic("ambient_loop.wav");
 
-    LOG_INFO("M6 ready — A/D move | Space jump | J attack | F1 debug | F5 save | F9 load | ESC quit");
+    LOG_INFO("M7 ready — A/D move | Space jump | J attack | F1 debug | F5 save | F9 load | ESC pause");
+}
+
+void GameScene::reinit(eng::core::App& /*app*/) {
+    using namespace eng::physics;
+
+    // Clear all Box2D bodies (b2World stays, contact listener stays)
+    {
+        b2Body* b = m_physics.world().GetBodyList();
+        while (b) { b2Body* next = b->GetNext(); m_physics.world().DestroyBody(b); b = next; }
+    }
+
+    // Reset ECS and gameplay containers
+    m_reg.clear();
+    m_enemies.clear();
+    m_fixtureData.clear();
+    m_player   = eng::ecs::kNullEntity;
+    m_miniBoss = eng::ecs::kNullEntity;
+    m_camState = sys::CameraState{};
+    m_deathTimer        = 0.f;
+    m_playerDeadElapsed = false;
+    m_hitStopTimer      = 0.f;
+    m_timeScale         = 1.f;
+
+    // Load save data (will restore pos/hp)
+    auto sd = eng::save::SaveSystem{}.load();
+    if (sd) m_saveData = *sd;
+
+    // Re-wire the contact listener (registry was rebuilt)
+    m_physics.setContactListener(&m_contactListener);
+    m_physics.world().SetDebugDraw(m_dbgDraw);
+
+    // Rebuild tileset + parallax + tilemap + level entities
+    m_tilesetTex = m_textures.get("tileset");
+    m_tileMap    = std::make_unique<eng::map::TileMap>(
+        eng::map::TileMap::fromFile(ASSET_ROOT "/maps/test_level.tmx"));
+
+    m_parallax.clear();
+    m_parallax.push_back({m_textures.get("parallax_sky"),       0.05f,  0.5f, 11.f, -4.f, 32.f});
+    m_parallax.push_back({m_textures.get("parallax_mountains"), 0.20f, -1.0f,  9.f, -3.f, 32.f});
+    m_parallax.push_back({m_textures.get("parallax_trees"),     0.50f, -2.5f,  7.f, -2.f, 32.f});
+
+    buildLevel();
+
+    // Restore player position and HP from save
+    if (sd && m_reg.valid(m_player)) {
+        if (m_reg.has<RigidBody>(m_player))
+            m_reg.get<RigidBody>(m_player).body->SetTransform(toB2(sd->player.pos), 0.f);
+        if (m_reg.has<Health>(m_player)) {
+            auto& hp      = m_reg.get<Health>(m_player);
+            hp.current    = std::min(sd->player.hp, hp.max);
+            hp.dead       = false;
+            hp.invulnTimer = 0.f;
+        }
+    }
+
+    if (m_hud) m_hud->setBossVisible(false);
+    m_playtime = sd ? sd->playtime : 0.f;
+
+    // Resume music if needed
+    eng::audio::AudioEngine::instance().setMusicPaused(false);
 }
 
 // Helper: set category/mask filter on every fixture of a body
@@ -245,7 +317,7 @@ void GameScene::buildLevel() {
 
     auto& psr  = m_reg.emplace<SpriteRenderer>(m_player);
     psr.tex    = m_textures.get("player_sheet");
-    psr.size   = {0.9f, 0.9f};
+    psr.size   = {0.5f, 1.0f};
 
     m_reg.emplace<PlayerControl>(m_player);
 
@@ -328,7 +400,7 @@ void GameScene::spawnEnemyFromObject(const eng::map::MapObject& obj) {
         sr.tex = m_textures.get(texKey);
     else
         sr.tex = m_textures.get("dummy"); // fallback until Fase G adds enemy sheets
-    sr.size = {halfW * 2.f * 1.4f, halfH * 2.f * 1.2f};
+    sr.size = {halfW * 2.f, halfH * 2.f};
 
     // Hurtbox
     b2Fixture* hurtFix = m_physics.addSensorBox(body, {0.f, 0.f}, halfW, halfH);
@@ -347,7 +419,7 @@ void GameScene::spawnEnemyFromObject(const eng::map::MapObject& obj) {
     auto& hx    = m_reg.emplace<Hitbox>(en);
     hx.fixture  = hitFix;
     hx.damage   = 1.f;
-    hx.knockback = {-3.f, 1.f}; // knock player back
+    hx.knockback = {3.f, 1.f}; // direction resolved at hit time via attacker facing
 
     m_reg.emplace<Health>(en, Health{3.f, 3.f});
 
@@ -379,7 +451,7 @@ void GameScene::spawnMiniBossFromObject(const eng::map::MapObject& obj) {
 
     auto& sr  = m_reg.emplace<SpriteRenderer>(m_miniBoss);
     sr.tex    = m_textures.has("boss") ? m_textures.get("boss") : m_textures.get("dummy");
-    sr.size   = {halfW * 2.f * 1.4f, halfH * 2.f * 1.2f};
+    sr.size   = {halfW * 2.f, halfH * 2.f};
 
     // Hurtbox
     b2Fixture* hurtFix = m_physics.addSensorBox(body, {0.f, 0.f}, halfW, halfH);
@@ -398,7 +470,7 @@ void GameScene::spawnMiniBossFromObject(const eng::map::MapObject& obj) {
     auto& hx    = m_reg.emplace<Hitbox>(m_miniBoss);
     hx.fixture  = hitFix;
     hx.damage   = 2.f;
-    hx.knockback = {-5.f, 2.f};
+    hx.knockback = {5.f, 2.f}; // direction resolved at hit time via attacker facing
 
     m_reg.emplace<Health>(m_miniBoss, Health{30.f, 30.f});
 
@@ -488,7 +560,7 @@ void GameScene::update(float dt, eng::core::App& app) {
     };
     sys::enemyAIUpdate(m_reg, m_physics, playerPos, gdt, m_clips, spawnProj, onEnemyDeath);
 
-    sys::combatPreUpdate(m_reg, gdt);
+    sys::combatPreUpdate(m_reg, gdt, m_attackTable);
     sys::enemyCombatPreUpdate(m_reg, gdt);
     m_physics.step(gdt);
     sys::physicsSyncUpdate(m_reg);
@@ -505,6 +577,14 @@ void GameScene::update(float dt, eng::core::App& app) {
         if (m_hud) m_hud->pushDamagePopup(pos, dmg);
     };
     sys::combatPostUpdate(m_reg, m_contactListener, onHitStop, onTrauma, onHitSpark, onDamageDealt);
+
+    // --- Player death timer (real dt, not scaled) ---
+    if (!m_playerDeadElapsed && m_reg.valid(m_player) && m_reg.has<Health>(m_player)) {
+        if (m_reg.get<Health>(m_player).dead) {
+            m_deathTimer += dt;
+            if (m_deathTimer >= 1.5f) m_playerDeadElapsed = true;
+        }
+    }
 
     // --- Camera (uses real dt — continues animating during hit-stop) ---
     if (m_reg.valid(m_player)) {

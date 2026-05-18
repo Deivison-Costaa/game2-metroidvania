@@ -27,7 +27,9 @@ maps/*.tmx
 !assets/models/.gitkeep
 !assets/models/cube.obj
 !assets/textures/.gitkeep
+!assets/textures/lut_cinematic.png
 !assets/fonts/.gitkeep
+!assets/fonts/Kenney_Future.ttf
 !audio/music/.gitkeep
 !audio/sfx/.gitkeep
 !maps/.gitkeep

@@ -41,10 +41,15 @@ cmake --build build -j$(nproc)
 | D / → | Mover direita |
 | Espaço | Pular (coyote time + jump buffer) |
 | J | Atacar (hitbox data-driven) |
+| ESC | Pause / Voltar |
+| ↑ / W | Navegar menu (cima) |
+| ↓ / S | Navegar menu (baixo) |
+| ← / → | Ajustar sliders de volume |
+| Enter | Confirmar |
 | F1 | Toggle debug-draw Box2D (hitboxes visíveis) |
 | F5 | Salvar jogo (posição + HP + inimigos derrotados) |
 | F9 | Carregar último save |
-| ESC | Sair |
+| Q | Sair |
 
 **Mecânicas de movimento:**
 - Soltar Espaço cedo = pulo curto (variable jump height)
@@ -62,7 +67,7 @@ cmake --build build -j$(nproc)
 | M4 | Inimigos com IA FSM + Tiled (.tmx) + Paralaxe + raycastAny | ✅ |
 | M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | ✅ |
 | M6 | Áudio + UI + Save/Load + Mini-boss | ✅ |
-| M7 | Polish + Assets finais + Color grade | 🔜 |
+| M7 | Polish + Color grade LUT + Menus + Bug fixes | ✅ |
 
 ## Estrutura
 
@@ -79,3 +84,20 @@ docs/     — documentação técnica
 ## Visual target
 
 Ori and the Blind Forest · Hollow Knight · Ender Lilies · INSIDE · Dead Cells
+
+## Créditos
+
+| Asset | Autor | Licença |
+|-------|-------|---------|
+| Kenney Future (fonte) | Kenney.nl | CC0 — https://kenney.nl/assets/kenney-fonts |
+| Liberation Sans Bold | Red Hat / Liberation | SIL OFL 1.1 |
+| Carlito Bold | Google Fonts | SIL OFL 1.1 |
+| stb_image | Sean Barrett | Public Domain / MIT |
+| nlohmann/json | Niels Lohmann | MIT |
+| Dear ImGui | Omar Cornut | MIT |
+| GLM | G-Truc Creation | MIT |
+| Box2D 2.4 | Erin Catto | MIT |
+| OpenAL Soft | Chris Robinson | LGPL 2.1 |
+| FreeType | FreeType Project | FreeType License |
+
+Para sprites de terceiros (Craftpix / itch.io), veja `scripts/download_assets.sh` para instruções de download.

@@ -12,7 +12,13 @@ InputManager::InputManager() {
     m_bindings[static_cast<std::size_t>(Action::ToggleDebug)] = SDL_SCANCODE_F1;
     m_bindings[static_cast<std::size_t>(Action::SaveGame)]    = SDL_SCANCODE_F5;
     m_bindings[static_cast<std::size_t>(Action::LoadGame)]    = SDL_SCANCODE_F9;
-    m_bindings[static_cast<std::size_t>(Action::Quit)]        = SDL_SCANCODE_ESCAPE;
+    m_bindings[static_cast<std::size_t>(Action::Quit)]        = SDL_SCANCODE_Q;
+    m_bindings[static_cast<std::size_t>(Action::MenuUp)]      = SDL_SCANCODE_W;
+    m_bindings[static_cast<std::size_t>(Action::MenuDown)]    = SDL_SCANCODE_S;
+    m_bindings[static_cast<std::size_t>(Action::MenuLeft)]    = SDL_SCANCODE_LEFT;
+    m_bindings[static_cast<std::size_t>(Action::MenuRight)]   = SDL_SCANCODE_RIGHT;
+    m_bindings[static_cast<std::size_t>(Action::MenuConfirm)] = SDL_SCANCODE_RETURN;
+    m_bindings[static_cast<std::size_t>(Action::MenuCancel)]  = SDL_SCANCODE_ESCAPE;
 }
 
 void InputManager::beginFrame() {
@@ -27,10 +33,20 @@ void InputManager::handleEvent(const SDL_Event& ev) {
     // Left-arrow / right-arrow as alternate Move bindings
     if (ev.type == SDL_KEYDOWN || ev.type == SDL_KEYUP) {
         const bool pressed = (ev.type == SDL_KEYDOWN);
-        if (ev.key.keysym.scancode == SDL_SCANCODE_LEFT)
+        if (ev.key.keysym.scancode == SDL_SCANCODE_LEFT) {
             m_curr[static_cast<std::size_t>(Action::MoveLeft)]  = pressed;
-        if (ev.key.keysym.scancode == SDL_SCANCODE_RIGHT)
+            m_curr[static_cast<std::size_t>(Action::MenuLeft)]  = pressed;
+        }
+        if (ev.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
             m_curr[static_cast<std::size_t>(Action::MoveRight)] = pressed;
+            m_curr[static_cast<std::size_t>(Action::MenuRight)] = pressed;
+        }
+        if (ev.key.keysym.scancode == SDL_SCANCODE_UP)
+            m_curr[static_cast<std::size_t>(Action::MenuUp)]    = pressed;
+        if (ev.key.keysym.scancode == SDL_SCANCODE_DOWN)
+            m_curr[static_cast<std::size_t>(Action::MenuDown)]  = pressed;
+        if (ev.key.keysym.scancode == SDL_SCANCODE_KP_ENTER)
+            m_curr[static_cast<std::size_t>(Action::MenuConfirm)] = pressed;
     }
     (void)ev; // other events handled by beginFrame snapshot
 }

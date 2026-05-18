@@ -11,12 +11,14 @@ add_library(engine STATIC
     src/render/Framebuffer.cpp
     src/render/FullscreenQuad.cpp
     src/render/PostProcessStack.cpp
+    src/render/Texture3D.cpp
     src/render/ParticleSystem.cpp
     src/ecs/Registry.cpp
     src/input/InputManager.cpp
     src/physics/PhysicsWorld.cpp
     src/physics/DebugDraw.cpp
     src/animation/AnimationClip.cpp
+    src/animation/AttackTable.cpp
     src/map/TileMap.cpp
     src/map/TileMapRenderer.cpp
     # M6 — audio
