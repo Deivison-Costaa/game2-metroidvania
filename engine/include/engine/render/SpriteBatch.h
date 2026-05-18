@@ -21,13 +21,25 @@ public:
 
     void begin(const Camera& camera);
 
-    // Draw a world-space sprite quad.
-    // pos: center in world, size: half-extents in world units, color: tint rgba.
+    // Draw a world-space sprite quad with full texture.
+    // pos: center in world, size: full width/height in world units, color: tint rgba.
     void draw(const Texture& tex,
               const glm::vec3& pos,
               const glm::vec2& size,
               const glm::vec4& color = glm::vec4(1.f),
-              float            rotation = 0.f);
+              float            rotation = 0.f,
+              bool             flipX = false);
+
+    // Draw a world-space sprite quad with a UV sub-rectangle (for sprite sheets).
+    // uvMin/uvMax are normalized [0..1] atlas coordinates.
+    void draw(const Texture& tex,
+              const glm::vec3& pos,
+              const glm::vec2& size,
+              const glm::vec2& uvMin,
+              const glm::vec2& uvMax,
+              const glm::vec4& color = glm::vec4(1.f),
+              float            rotation = 0.f,
+              bool             flipX = false);
 
     void end();
 

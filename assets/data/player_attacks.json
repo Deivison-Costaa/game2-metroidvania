@@ -1,0 +1,14 @@
+{
+    "attack1": {
+        "duration": 0.25,
+        "windows": [
+            {
+                "start": 0.05,
+                "end": 0.18,
+                "hitbox": { "ox": 0.6, "oy": 0.0, "hw": 0.4, "hh": 0.3 },
+                "damage": 1.0,
+                "knockback": [4.0, 1.5]
+            }
+        ]
+    }
+}

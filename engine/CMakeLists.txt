@@ -11,6 +11,7 @@ add_library(engine STATIC
     src/input/InputManager.cpp
     src/physics/PhysicsWorld.cpp
     src/physics/DebugDraw.cpp
+    src/animation/AnimationClip.cpp
 )
 
 target_include_directories(engine
@@ -25,6 +26,7 @@ target_link_libraries(engine
         GLEW::GLEW
         glm::glm
         box2d
+        nlohmann_json::nlohmann_json
     PRIVATE
         Freetype::Freetype
         stb

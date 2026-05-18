@@ -16,12 +16,16 @@ public:
 
     // Update aspect ratio (call from onEvent on window resize)
     void setAspect(float aspect);
+    // Update vertical field of view (radians); no-op for orthographic cameras
+    void setFov(float fovYRad);
 
     const glm::mat4& view()           const;
     const glm::mat4& projection()     const { return m_proj; }
     glm::mat4        viewProjection() const { return m_proj * view(); }
 
     const glm::vec3& position() const { return m_pos; }
+    const glm::vec3& target()   const { return m_target; }
+    float            fov()      const { return m_fovY; }
 
 private:
     Camera() = default;

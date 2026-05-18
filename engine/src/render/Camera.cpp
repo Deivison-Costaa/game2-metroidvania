@@ -28,6 +28,12 @@ void Camera::setAspect(float aspect) {
     m_proj   = glm::perspective(m_fovY, m_aspect, m_zNear, m_zFar);
 }
 
+void Camera::setFov(float fovYRad) {
+    if (!m_isPerspective) return;
+    m_fovY = fovYRad;
+    m_proj = glm::perspective(m_fovY, m_aspect, m_zNear, m_zFar);
+}
+
 const glm::mat4& Camera::view() const {
     if (m_dirty) {
         m_view  = glm::lookAt(m_pos, m_target, m_up);

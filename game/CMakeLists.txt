@@ -4,6 +4,9 @@ add_executable(game
     src/systems/PlayerControllerSystem.cpp
     src/systems/PhysicsSyncSystem.cpp
     src/systems/SpriteRenderSystem.cpp
+    src/systems/AnimationSystem.cpp
+    src/systems/CombatSystem.cpp
+    src/systems/CameraSystem.cpp
 )
 
 target_include_directories(game PRIVATE src)

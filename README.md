@@ -39,9 +39,15 @@ cmake --build build -j$(nproc)
 |-------|------|
 | A / ← | Mover esquerda |
 | D / → | Mover direita |
-| Espaço | Pular |
-| F1 | Toggle debug-draw Box2D |
+| Espaço | Pular (coyote time + jump buffer) |
+| J | Atacar (hitbox data-driven) |
+| F1 | Toggle debug-draw Box2D (hitboxes visíveis) |
 | ESC | Sair |
+
+**Mecânicas de movimento:**
+- Soltar Espaço cedo = pulo curto (variable jump height)
+- Pular até 100 ms após sair de uma borda = coyote time
+- Pressionar Espaço até 150 ms antes de aterrissar = jump buffer
 
 ## Milestones
 
@@ -50,7 +56,7 @@ cmake --build build -j$(nproc)
 | M0 | Bootstrap — janela + shader animado | ✅ |
 | M1 | Renderer 2D + 3D (SpriteBatch, MeshRenderer, Camera) | ✅ |
 | M2 | ECS + Physics (Box2D) + Input | ✅ |
-| M3 | Animation + Combate + Câmera cinematográfica | 🔜 |
+| M3 | Animation StateMachine + Combate data-driven + Câmera cinematográfica | ✅ |
 | M4 | Inimigos com IA FSM + Tiled (.tmx) | 🔜 |
 | M5 | Shaders avançados (Bloom, Fog, God Rays, Partículas) | 🔜 |
 | M6 | Áudio + UI + Save/Load + Mini-boss | 🔜 |

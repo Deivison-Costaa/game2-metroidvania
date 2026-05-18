@@ -74,7 +74,19 @@ void SpriteBatch::draw(const Texture& tex,
                        const glm::vec3& pos,
                        const glm::vec2& size,
                        const glm::vec4& color,
-                       float rotation) {
+                       float rotation,
+                       bool flipX) {
+    draw(tex, pos, size, {0.f, 0.f}, {1.f, 1.f}, color, rotation, flipX);
+}
+
+void SpriteBatch::draw(const Texture& tex,
+                       const glm::vec3& pos,
+                       const glm::vec2& size,
+                       const glm::vec2& uvMin,
+                       const glm::vec2& uvMax,
+                       const glm::vec4& color,
+                       float rotation,
+                       bool flipX) {
     // Flush if switching textures or batch is full
     if (m_currentTex && m_currentTex->id() != tex.id())
         flush();
@@ -83,7 +95,7 @@ void SpriteBatch::draw(const Texture& tex,
 
     m_currentTex = &tex;
 
-    // Build quad corners in local space then rotate around Z
+    // size is full width/height; half-extents for quad corners
     const float hw = size.x * 0.5f;
     const float hh = size.y * 0.5f;
 
@@ -94,8 +106,12 @@ void SpriteBatch::draw(const Texture& tex,
     const float c = glm::cos(rotation);
     const float s = glm::sin(rotation);
 
+    // UV corners: BL, BR, TR, TL — flip U axis when facing left
+    const float uLeft  = flipX ? uvMax.x : uvMin.x;
+    const float uRight = flipX ? uvMin.x : uvMax.x;
     const std::array<glm::vec2, 4> uvs = {{
-        {0.f, 0.f}, {1.f, 0.f}, {1.f, 1.f}, {0.f, 1.f}
+        {uLeft,  uvMin.y}, {uRight, uvMin.y},
+        {uRight, uvMax.y}, {uLeft,  uvMax.y}
     }};
 
     for (int i = 0; i < 4; ++i) {

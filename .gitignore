@@ -20,6 +20,8 @@ audio/sfx/*
 maps/*.tmx
 !assets/sprites/.gitkeep
 !assets/sprites/test.png
+!assets/sprites/player_sheet.png
+!assets/sprites/dummy.png
 !assets/tilesets/.gitkeep
 !assets/models/.gitkeep
 !assets/models/cube.obj
