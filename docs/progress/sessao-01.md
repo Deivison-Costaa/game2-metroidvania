@@ -196,47 +196,49 @@ Placeholders `.gitkeep` criados para módulos M1+:
 - Criada pasta `docs/progress/` no repositório
 - Este arquivo criado: `docs/progress/sessao-01.md`
 
-### Status da validação M0
+### Validação M0 — CONCLUÍDA
 
-**Pendente:** dependências de desenvolvimento não instaladas.
-
-Comando necessário (executar com sudo):
-```bash
-sudo dnf install -y \
-  sdl2-compat-devel SDL2_image-devel \
-  openal-soft-devel \
-  assimp-devel \
-  Box2D-devel \
-  freetype-devel \
-  pugixml-devel \
-  glm-devel \
-  glew-devel \
-  mesa-libGL-devel mesa-libGLU-devel libglvnd-devel
+**Deps instaladas:**
+```
+sdl2-compat-devel-2.32.64  glew-devel-2.2.0       glm-devel-1.0.1
+openal-soft-devel-1.24.2   assimp-devel-6.0.4     Box2D-devel-2.4.2
+freetype-devel-2.13.3      pugixml-devel-1.15      mesa-libGL-devel-25.3.6
 ```
 
-Após instalação, build:
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Debug
-cmake --build build -j$(nproc)
-./build/game/game
+**FetchContent (download automático pelo CMake):** nlohmann/json v3.11.3, stb (master), Dear ImGui v1.91.0.
+
+**Build:** 0 erros, 0 warnings.
+
+**Output do binário (4 segundos de execução):**
+```
+[INFO] OpenGL  : 4.6 (Core Profile) Mesa 25.3.6
+[INFO] GLSL    : 4.60
+[INFO] Renderer: Mesa Intel(R) Graphics (RPL-S)
+[INFO] M0 bootstrap ready — press ESC to quit
+[INFO] FPS: 140  |  frame: 7.18 ms
+[INFO] FPS: 144  |  frame: 6.99 ms
+[INFO] FPS: 144  |  frame: 6.96 ms
+[INFO] Shutdown clean
 ```
 
-**Resultado esperado:** janela 1280×720 com gradiente atmosférico animado + estrelas.
+**Nota:** GPU é Intel Raptor Lake-S (integrada). Mesa expõe OpenGL 4.6 — totalmente compatível com o planejado para 4.5.
 
 ---
 
-## Checklist M0
+## Checklist M0 — COMPLETA
 
-- [x] Estrutura de diretórios criada (25+ pastas)
-- [x] CMake configurado com FetchContent + find_package
-- [x] Engine lib estática compilável
-- [x] Window RAII (SDL2 + OpenGL 4.5 + GLEW)
+- [x] Estrutura de diretórios (25+ pastas)
+- [x] CMake com FetchContent + find_package
+- [x] Engine lib estática — 0 erros, 0 warnings
+- [x] Window RAII (SDL2 + OpenGL 4.6 + GLEW)
 - [x] App loop com delta time, FPS counter, GL sentinel
 - [x] Shader RAII com uniforms tipados
 - [x] Fullscreen triangle sem VBO (gl_VertexID)
-- [x] Shader GLSL 4.50 com gradiente animado + estrelas
-- [x] Log.h com std::format e ANSI colors
+- [x] Shader GLSL 4.60 — gradiente animado + estrelas + vignette
+- [x] Log.h com std::format e cores ANSI
 - [x] .gitignore, README.md
-- [x] Repositório GitHub criado e código publicado
-- [ ] **Build compilando** — aguardando instalação das deps
-- [ ] **Binário rodando** — aguardando build
+- [x] Repositório GitHub publicado
+- [x] Build: 0 erros, 0 warnings
+- [x] Binário: 144 FPS, shutdown limpo, sem leaks GL
+
+**M0 concluido. Pronto para M1.**
