@@ -1,0 +1,28 @@
+build/
+.cache/
+compile_commands.json
+*.user
+*.swp
+*.swo
+.DS_Store
+
+# FetchContent downloads (managed by CMake)
+_deps/
+
+# Assets that are downloaded separately (not committed)
+assets/sprites/*
+assets/tilesets/*
+assets/models/*
+assets/textures/*
+assets/fonts/*
+audio/music/*
+audio/sfx/*
+maps/*.tmx
+!assets/sprites/.gitkeep
+!assets/tilesets/.gitkeep
+!assets/models/.gitkeep
+!assets/textures/.gitkeep
+!assets/fonts/.gitkeep
+!audio/music/.gitkeep
+!audio/sfx/.gitkeep
+!maps/.gitkeep
